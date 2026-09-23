@@ -372,14 +372,9 @@ async def procesar_imagen(
 
     ctx = sesion.contexto or {}
     
-    mensajes_nuevos = []
-    
-    # Primer mensaje: respuesta directa al resultado
-    contenido_inicial = _interpolar_contexto(await construir_mensaje_nodo(db, destino), ctx)
-    mensajes_nuevos.append(contenido_inicial)
-    
-    mensajes_automaticos, nodo_final = await _seguir_cadena_automatica(db, sesion, destino, ctx)
-    mensajes_nuevos.extend(mensajes_automaticos)
+    # _seguir_cadena_automatica ya incluye el mensaje del nodo inicial en su lista
+    # No agregar contenido_inicial por separado para evitar duplicados
+    mensajes_nuevos, nodo_final = await _seguir_cadena_automatica(db, sesion, destino, ctx)
     
     await _crear_caso_si_corresponde(db, sesion, nodo_final)
 

@@ -639,3 +639,9 @@ a:hover {
   animation: spin 1s linear infinite;
   color: var(--color-brand-primary);
 }
+
+/* SweetAlert2 Custom Backdrop */
+div:where(.swal2-container).swal2-backdrop-show, div:where(.swal2-container).swal2-noanimation {
+  backdrop-filter: blur(5px);
+  background: rgba(15, 17, 21, 0.8) !important;
+}

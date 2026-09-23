@@ -15,7 +15,17 @@ export default function FlowCanvas() {
     const [edges, setEdges] = useState(initialEdges);
 
     const onNodesChange = useCallback(
-        (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
+        (changes) => {
+            // Interceptar eliminaciones para pedir confirmación antes de borrar
+            const eliminaciones = changes.filter((c) => c.type === 'remove');
+            if (eliminaciones.length > 0) {
+                const confirmar = window.confirm(
+                    '¿Seguro que quieres eliminar este nodo? Esta acción no se puede deshacer.'
+                );
+                if (!confirmar) return; // El usuario canceló — no aplicar el cambio
+            }
+            setNodes((nds) => applyNodeChanges(changes, nds));
+        },
         []
     );
 

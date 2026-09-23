@@ -16,6 +16,22 @@ import {
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import toast from 'react-hot-toast';
+import Swal from 'sweetalert2';
+import withReactContent from 'sweetalert2-react-content';
+
+const MySwal = withReactContent(Swal).mixin({
+  background: 'var(--color-bg-card)',
+  color: 'var(--color-text-primary)',
+  iconColor: 'var(--color-warning-base)',
+  customClass: {
+    popup: 'border border-[var(--color-border-strong)] rounded-xl shadow-2xl',
+    confirmButton: 'btn btn-danger',
+    cancelButton: 'btn btn-outline',
+    actions: 'flex gap-3 w-full justify-center mt-4'
+  },
+  buttonsStyling: false,
+});
 
 const API_BASE = 'http://localhost:8000/api/v1/admin';
 
@@ -291,11 +307,18 @@ export default function AdminPanel() {
     } catch (err) {
       console.error('Error creando transición:', err);
       setEdges((eds) => eds.filter((e) => e.id !== edgeId));
-      alert(`Error al guardar la conexión: ${err.message}`);
+      toast.error(`Error al guardar la conexión: ${err.message}`);
     }
   }, [validarArbol]);
 
   const agregarClusterDNI = useCallback(async () => {
+    let startX = 100;
+    let startY = 100;
+    if (nodes.length > 0) {
+      startX = Math.max(...nodes.map(n => n.position.x)) + 350;
+      startY = nodes[0].position.y;
+    }
+
     const baseId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const solicitudId = `dni_solicitud_${baseId}`;
     const errorId = `dni_error_${baseId}`;
@@ -305,22 +328,22 @@ export default function AdminPanel() {
         codigo: solicitudId,
         contenido: 'Suba una imagen de su DNI',
         tipo: 'ACCION',
-        posicion_x: 920,
-        posicion_y: 80,
+        posicion_x: startX,
+        posicion_y: startY,
       },
       {
         codigo: errorId,
         contenido: 'Validación incorrecta. Intente de nuevo.',
         tipo: 'MENSAJE',
-        posicion_x: 1160,
-        posicion_y: 80,
+        posicion_x: startX + 280,
+        posicion_y: startY + 120,
       },
       {
         codigo: exitoId,
         contenido: 'Validación exitosa. Nombre: {nombre_usuario}, Correo: {correo_usuario}',
         tipo: 'MENSAJE_DINAMICO',
-        posicion_x: 1400,
-        posicion_y: 80,
+        posicion_x: startX + 280,
+        posicion_y: startY - 20,
       },
     ];
 
@@ -350,16 +373,26 @@ export default function AdminPanel() {
 
       await cargarGrafo();
       await validarArbol();
-      alert('Nodos y conexiones DNI creados correctamente.');
+      toast.success('Nodos y conexiones DNI creados correctamente.');
+      if (reactFlowInstance) {
+        setTimeout(() => reactFlowInstance.setCenter(startX + 140, startY + 50, { zoom: 1, duration: 800 }), 100);
+      }
     } catch (err) {
       console.error('Error creando flujo DNI:', err);
-      alert(`Error al crear el flujo DNI: ${err.message}`);
+      toast.error(`Error al crear el flujo DNI: ${err.message}`);
     }
-  }, [cargarGrafo, validarArbol]);
+  }, [cargarGrafo, validarArbol, nodes, reactFlowInstance]);
 
   const agregarClusterGmail = useCallback(async () => {
+    let startX = 100;
+    let startY = 100;
+    if (nodes.length > 0) {
+      startX = Math.max(...nodes.map(n => n.position.x)) + 350;
+      startY = nodes[0].position.y;
+    }
+
     try {
-      const res = await fetch(`${API_BASE}/nodos/plantilla/verificacion-correo`, {
+      const res = await fetch(`${API_BASE}/nodos/plantilla/verificacion-correo?x=${startX}&y=${startY}`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -373,19 +406,26 @@ export default function AdminPanel() {
       const data = await res.json();
       await cargarGrafo();
       await validarArbol();
-      alert(
-        `✅ Cluster Gmail creado (sufijo: ${data.sufijo})\n\n` +
-        `Nodos creados:\n` +
-        `• ${data.nodos.solicitar.codigo}  ← entrada\n` +
-        `• ${data.nodos.exito.codigo}  ← éxito\n` +
-        `• ${data.nodos.baneado.codigo}  ← ban\n\n` +
-        `Arrastra el nodo "solicitar" y conéctalo desde tu menú.`
+      toast.success(
+        <div>
+          <strong>Cluster Gmail creado (sufijo: {data.sufijo})</strong>
+          <ul className="mt-2 text-sm">
+            <li>• {data.nodos.solicitar.codigo} ← entrada</li>
+            <li>• {data.nodos.exito.codigo} ← éxito</li>
+            <li>• {data.nodos.baneado.codigo} ← ban</li>
+          </ul>
+          <p className="mt-2 text-xs text-[var(--color-text-muted)]">Arrastra el nodo "solicitar" y conéctalo desde tu menú.</p>
+        </div>,
+        { duration: 6000 }
       );
+      if (reactFlowInstance) {
+        setTimeout(() => reactFlowInstance.setCenter(startX + 150, startY + 50, { zoom: 1, duration: 800 }), 100);
+      }
     } catch (err) {
       console.error('Error creando cluster Gmail:', err);
-      alert(`Error al crear el cluster Gmail: ${err.message}`);
+      toast.error(`Error al crear el cluster Gmail: ${err.message}`);
     }
-  }, [cargarGrafo, validarArbol]);
+  }, [cargarGrafo, validarArbol, nodes, reactFlowInstance]);
 
   const onInit = useCallback((instance) => {
     setReactFlowInstance(instance);
@@ -461,7 +501,7 @@ export default function AdminPanel() {
   const handleSubmitNodo = async (e) => {
     e.preventDefault();
     if (!formCodigo.trim() || !formContenido.trim()) {
-      alert('Código y contenido son obligatorios.');
+      toast.error('Código y contenido son obligatorios.');
       return;
     }
 
@@ -507,7 +547,7 @@ export default function AdminPanel() {
           );
           return nextNodes;
         });
-        alert('¡Nodo actualizado!');
+        toast.success('¡Nodo actualizado!');
       } else {
         const newNode = {
           id: savedNode.id,
@@ -516,7 +556,7 @@ export default function AdminPanel() {
           data: { ...savedNode, valor_entrada: null },
         };
         setNodes((nds) => [...nds, newNode]);
-        alert('¡Nodo creado!');
+        toast.success('¡Nodo creado!');
       }
 
       resetFormularioNodo();
@@ -524,7 +564,7 @@ export default function AdminPanel() {
       if (reactFlowInstance) reactFlowInstance.fitView({ padding: 0.15, duration: 300 });
     } catch (err) {
       console.error('Error:', err);
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     }
   };
 
@@ -558,10 +598,10 @@ export default function AdminPanel() {
         );
         return nextEdges;
       });
-      alert('¡Opción guardada!');
+      toast.success('¡Opción guardada!');
       await validarArbol();
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     }
     setEdgeEditandoId(null);
     setFormEtiqueta('');
@@ -570,7 +610,17 @@ export default function AdminPanel() {
 
   const handleDeleteNodo = async () => {
     if (!nodoEditandoId) return;
-    if (!confirm('¿Desactivar este nodo y eliminar sus conexiones? Podrás reactivarlo después desde el editor.')) return;
+    
+    const result = await MySwal.fire({
+      title: '¿Desactivar nodo?',
+      text: 'Se eliminarán sus conexiones. Podrás reactivarlo después desde el editor.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, desactivar',
+      cancelButtonText: 'Cancelar'
+    });
+    
+    if (!result.isConfirmed) return;
 
     try {
       const res = await fetch(`${API_BASE}/nodos/${nodoEditandoId}`, {
@@ -587,17 +637,27 @@ export default function AdminPanel() {
         : n
       ));
       setEdges((eds) => eds.filter((e) => e.source !== nodoEditandoId && e.target !== nodoEditandoId));
-      alert('Nodo desactivado y conexiones eliminadas. Puedes reactivarlo editando el nodo.');
+      toast.success('Nodo desactivado y conexiones eliminadas.');
       await validarArbol();
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     }
     resetFormularioNodo();
   };
 
   const handleDeleteEdge = async () => {
     if (!edgeEditandoId) return;
-    if (!confirm('¿Eliminar esta conexión?')) return;
+    
+    const result = await MySwal.fire({
+      title: '¿Eliminar conexión?',
+      text: 'Esta acción no se puede deshacer.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar'
+    });
+    
+    if (!result.isConfirmed) return;
 
     try {
       const res = await fetch(`${API_BASE}/opciones/${edgeEditandoId}`, {
@@ -607,10 +667,10 @@ export default function AdminPanel() {
       if (!res.ok) throw new Error('No se pudo eliminar');
 
       setEdges((eds) => eds.filter((e) => e.id !== edgeEditandoId));
-      alert('Conexión eliminada');
+      toast.success('Conexión eliminada');
       await validarArbol();
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     }
     setEdgeEditandoId(null);
   };

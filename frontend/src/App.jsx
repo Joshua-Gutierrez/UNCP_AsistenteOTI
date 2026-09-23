@@ -4,6 +4,7 @@ import ChatContainer from './components/Chat/ChatContainer';
 import AdminPanel from './components/Admin/AdminPanel';
 import AdminLogin from './components/Admin/AdminLogin';
 import AdminDashboard from './components/Admin/AdminDashboard';
+import { Toaster } from 'react-hot-toast';
 
 function NavBar() {
   const location = useLocation();
@@ -57,6 +58,40 @@ function NavBar() {
 function App() {
   return (
     <Router>
+      <Toaster 
+        position="top-right" 
+        toastOptions={{ 
+          className: 'text-sm font-sans',
+          style: {
+            background: 'var(--color-bg-card)',
+            color: 'var(--color-text-primary)',
+            border: '1px solid var(--color-border-strong)',
+            boxShadow: 'var(--shadow-lg)'
+          },
+          success: {
+            style: {
+              background: 'var(--color-success-base)',
+              border: 'none',
+              color: '#ffffff',
+            },
+            iconTheme: {
+              primary: '#ffffff',
+              secondary: 'var(--color-success-base)',
+            }
+          },
+          error: {
+            style: {
+              background: 'var(--color-danger-base)',
+              border: 'none',
+              color: '#ffffff',
+            },
+            iconTheme: {
+              primary: '#ffffff',
+              secondary: 'var(--color-danger-base)',
+            }
+          }
+        }} 
+      />
       <AppShell />
     </Router>
   );

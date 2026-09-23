@@ -16,11 +16,30 @@ const esErrorValidacionDni = (contenido = '') => {
   );
 };
 
+// Mapa de errores técnicos → mensajes amigables para el usuario final
+const ERRORES_AMIGABLES = {
+  smtp: 'No pudimos enviar el código de verificación. Intenta de nuevo en unos minutos.',
+  ocr: 'No pudimos leer la imagen del DNI. Asegúrate de que la foto sea clara y esté bien iluminada.',
+  pdf: 'Por favor envía una foto de tu DNI, no un PDF ni un documento.',
+  formato: 'El archivo no es una imagen válida. Envía una foto en formato JPG, PNG o similar.',
+  default: 'Ocurrió un problema. Intenta de nuevo en unos momentos.',
+};
+
+function mensajeAmigable(errorMsg = '') {
+  const msg = errorMsg.toLowerCase();
+  if (msg.includes('smtp') || msg.includes('correo') || msg.includes('email')) return ERRORES_AMIGABLES.smtp;
+  if (msg.includes('ocr') || msg.includes('reconoc') || msg.includes('leer') || msg.includes('validar')) return ERRORES_AMIGABLES.ocr;
+  if (msg.includes('pdf')) return ERRORES_AMIGABLES.pdf;
+  if (msg.includes('formato') || msg.includes('tipo') || msg.includes('mime')) return ERRORES_AMIGABLES.formato;
+  return ERRORES_AMIGABLES.default;
+}
+
 export default function ChatContainer() {
   const [sesionId, setSesionId] = useState('');
   const [mensajes, setMensajes] = useState([]);
   const [textoInput, setTextoInput] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
   const [error, setError] = useState(null);
   const [esperandoDni, setEsperandoDni] = useState(false);
   const messagesEndRef = useRef(null);  // marcador al final de la lista
@@ -42,6 +61,13 @@ export default function ChatContainer() {
   useEffect(() => {
     scrollToBottom(true);
   }, [mensajes]);
+
+  // Devolver el foco al input cuando termina de cargar (el input estaba disabled)
+  useEffect(() => {
+    if (!cargando) {
+      inputRef.current?.focus();
+    }
+  }, [cargando]);
 
   // 1. Al cargar la página: Obtener la sesión y el historial
   useEffect(() => {
@@ -93,7 +119,7 @@ export default function ChatContainer() {
       setEsperandoDni(esSolicitudDni(ultimaRespuesta?.contenido));
     } catch (error) {
       console.error("Error de comunicación:", error);
-      setError('Error al enviar el mensaje. Intenta de nuevo.');
+      setError(mensajeAmigable(error?.message));
     } finally {
       setCargando(false);
     }
@@ -103,15 +129,28 @@ export default function ChatContainer() {
     const archivo = e.target.files?.[0];
     if (!archivo || !sesionId || cargando) return;
 
+    // Validación MIME type en el cliente — antes de llamar al API
+    if (!archivo.type.startsWith('image/')) {
+      setError(ERRORES_AMIGABLES.formato);
+      e.target.value = '';
+      return;
+    }
+
     setCargando(true);
+    setSubiendoImagen(true);
     setError(null);
+
+    // Burbuja optimista: el usuario ve feedback inmediato mientras procesa el OCR
+    setMensajes((prev) => [...prev, { remitente: 'usuario', contenido: '📷 Enviando foto del DNI...' }]);
+
     try {
       // El endpoint devuelve un array de mensajes (puede incluir auto-avances)
       const mensajesBot = await sendDniImage(sesionId, archivo);
       const respuestas = Array.isArray(mensajesBot) ? mensajesBot : [mensajesBot];
       setMensajes((prev) => [
-        ...prev,
-        { remitente: 'usuario', contenido: 'Imagen del DNI enviada' },
+        // Reemplaza la burbuja optimista por el resultado real
+        ...prev.slice(0, -1),
+        { remitente: 'usuario', contenido: '📷 Foto del DNI enviada' },
         ...respuestas,
       ]);
       // Evaluar el último mensaje para decidir si seguir mostrando el botón DNI
@@ -121,10 +160,13 @@ export default function ChatContainer() {
         esErrorValidacionDni(ultimaRespuesta?.contenido)
       );
     } catch (error) {
-      setError(error.message);
+      // Quitar la burbuja optimista si falló
+      setMensajes((prev) => prev.slice(0, -1));
+      setError(mensajeAmigable(error?.message));
     } finally {
       e.target.value = '';
       setCargando(false);
+      setSubiendoImagen(false);
     }
   };
 
@@ -228,7 +270,7 @@ export default function ChatContainer() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Julie está escribiendo...
+                {subiendoImagen ? 'Procesando foto del DNI...' : 'Julie está escribiendo...'}
               </div>
             </div>
           )}

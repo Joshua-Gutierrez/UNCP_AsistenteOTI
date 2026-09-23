@@ -8,6 +8,7 @@ from app.models.sesion_chat import SesionChat
 from app.models.mensaje import Mensaje
 from app.services.flujo import procesar_respuesta
 from app.schemas.mensaje import MensajeCreate, MensajeRead
+from app.core.datetime_utils import get_now_lima
 
 router = APIRouter(prefix="/mensajes", tags=["Mensajes"])
 
@@ -32,6 +33,7 @@ async def enviar_mensaje(mensaje_in: MensajeCreate, db: AsyncSession = Depends(g
         db.add(msg)
         mensajes_asistente.append(msg)
 
+    sesion.ultima_interaccion = get_now_lima()
     db.add(sesion)
     await db.commit()
 

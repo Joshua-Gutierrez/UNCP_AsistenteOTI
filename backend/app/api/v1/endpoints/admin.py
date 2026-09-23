@@ -264,6 +264,8 @@ async def eliminar_opcion(
 
 @router.post("/nodos/plantilla/verificacion-correo", status_code=status.HTTP_201_CREATED)
 async def crear_plantilla_verificacion_correo(
+    x: int = 100,
+    y: int = 100,
     session: AsyncSession = Depends(get_session),
     admin_id: str = Depends(admin_actual),
 ):
@@ -289,8 +291,8 @@ async def crear_plantilla_verificacion_correo(
             "contenido": "Introduzca su correo institucional para continuar.",
             "bandeja_destino": None,
             "activo": True,
-            "posicion_x": 100,
-            "posicion_y": 100,
+            "posicion_x": x,
+            "posicion_y": y,
         },
         {
             "codigo": f"correo_exito_{sufijo}",
@@ -298,8 +300,8 @@ async def crear_plantilla_verificacion_correo(
             "contenido": "Verificación exitosa. Continuando el chat.",
             "bandeja_destino": None,
             "activo": True,
-            "posicion_x": 400,
-            "posicion_y": 60,
+            "posicion_x": x + 300,
+            "posicion_y": y - 40,
         },
         {
             "codigo": f"correo_baneado_{sufijo}",
@@ -310,8 +312,8 @@ async def crear_plantilla_verificacion_correo(
             ),
             "bandeja_destino": None,
             "activo": True,
-            "posicion_x": 400,
-            "posicion_y": 200,
+            "posicion_x": x + 300,
+            "posicion_y": y + 100,
         },
     ]
 

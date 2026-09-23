@@ -87,6 +87,9 @@ export const sendDniImage = async (sessionId, imageFile) => {
 
     if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
+        if (response.status === 503) {
+            throw new Error('El lector de imagen aún se está iniciando. Espera unos segundos e intenta de nuevo.');
+        }
         throw new Error(detail.detail || 'No se pudo validar la imagen del DNI');
     }
     return await response.json();

@@ -11,6 +11,7 @@ from app.models.sesion_chat import SesionChat
 from app.models.usuario import Usuario
 from app.schemas.mensaje import MensajeRead
 from app.services.flujo import procesar_imagen
+from app.core.datetime_utils import get_now_lima
 
 router = APIRouter(prefix="/mensajes", tags=["Mensajes"])
 
@@ -35,6 +36,13 @@ async def enviar_imagen_dni(
         textos = await procesar_imagen(db, sesion, await imagen.read(), usuario)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        # Capturar errores internos (ej. PaddleOCR inicializando) y devolverlos
+        # como 503 con headers CORS intactos — sin esto el navegador ve un error de CORS
+        raise HTTPException(
+            status_code=503,
+            detail="El servicio de lectura de imagen no está disponible en este momento. Intenta en unos segundos."
+        ) from error
 
     mensajes_asistente = []
     for texto in textos:
@@ -46,6 +54,7 @@ async def enviar_imagen_dni(
         db.add(msg)
         mensajes_asistente.append(msg)
 
+    sesion.ultima_interaccion = get_now_lima()
     db.add(sesion)
     await db.commit()
 
