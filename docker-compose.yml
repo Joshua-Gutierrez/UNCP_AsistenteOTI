@@ -1,0 +1,53 @@
+services:
+  # Base de Datos (MySQL robusto)
+  db:
+    image: mysql:8.0
+    container_name: uncp_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: loquequieras
+      MYSQL_DATABASE: DBChatAsistente
+    # Windows usa el 3307 para no chocar con un MySQL local
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend (FastAPI)
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: uncp_fastapi
+    restart: unless-stopped
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
+    environment:
+      - UV_CACHE_DIR=/tmp/.uv-cache
+      - UV_PYTHON_INSTALL_DIR=/tmp/.uv-python
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+  # Gestor de Base de Datos
+  adminer:
+    image: adminer
+    container_name: uncp_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+volumes:
+  mysql_data:
+    name: uncp_mysql_data

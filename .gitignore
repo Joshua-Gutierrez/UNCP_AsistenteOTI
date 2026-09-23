@@ -1,0 +1,24 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Antigravity IDE
+.agents/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# IDEs y Editores
+.vscode/
+.idea/
+*.swp
+
+# Carpetas de datos locales (Docker)
+postgres_data/
+
+# Variables de Entorno
+.env
+.env.*
+!.env.example

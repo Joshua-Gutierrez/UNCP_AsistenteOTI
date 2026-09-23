@@ -1,0 +1,21 @@
+# Dependencias
+node_modules/
+
+# Archivos de Producción (El código compilado)
+dist/
+dist-ssr/
+build/
+
+# Variables de Entorno
+.env
+.env.local
+.env.*
+!.env.example
+
+# Logs de errores de npm/yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Caché de Vite
+.eslintcache

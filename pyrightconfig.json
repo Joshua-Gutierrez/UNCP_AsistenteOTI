@@ -1,0 +1,15 @@
+{
+  "include": ["backend"],
+  "exclude": [
+    "backend/.venv",
+    "backend/.venv-win",
+    "backend/__pycache__",
+    "frontend"
+  ],
+  "venvPath": "backend",
+  "venv": ".venv-win",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingModuleSource": false
+}

@@ -1,0 +1,22 @@
+# Entornos Virtuales y Dependencias
+.venv/
+.venv-win/
+env/
+venv/
+
+# Caché de Python (Para que no subas basura binaria)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Variables de Entorno (¡CRÍTICO: NUNCA SUBIR EL .env A GITHUB!)
+.env
+.env.local
+.env.*
+!.env.example
+
+# Logs y bases de datos locales
+*.log
+*.sqlite3
