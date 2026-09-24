@@ -104,7 +104,7 @@ function AppShell() {
   return (
     <div className="min-h-screen bg-[var(--color-bg)] flex flex-col">
       {!isAdmin && <NavBar />}
-      <main className="flex-1">
+      <main className="flex-1 flex flex-col min-h-0">
         <Routes>
           <Route path="/" element={<ChatContainer />} />
           <Route path="/admin/login" element={<AdminLogin />} />

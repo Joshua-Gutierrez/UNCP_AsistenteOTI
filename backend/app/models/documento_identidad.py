@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, DateTime, Text
+from sqlalchemy import Column, DateTime, Text, String
 from sqlmodel import SQLModel, Field
 from uuid_extensions import uuid7
 
@@ -14,6 +14,7 @@ class DocumentoIdentidad(SQLModel, table=True):
     tipo_documento: str = Field(max_length=50)
     ruta_archivo: str = Field(max_length=255)
     texto_extraido: str | None = Field(default=None, sa_column=Column(Text))
+    dni_extraido: str | None = Field(default= None, sa_column=Column(String(20)))
     validado: bool = Field(default=False)
     creado_en: datetime = Field(
         default_factory=get_now_lima,

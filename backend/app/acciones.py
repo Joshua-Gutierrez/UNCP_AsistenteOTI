@@ -116,12 +116,14 @@ def extraer_texto_dni(contenido: bytes) -> str:
 
 async def validar_imagen_dni(sesion: SesionChat, contenido: bytes, usuario: Usuario, db) -> str:
     texto_extraido = extraer_texto_dni(contenido)
+    dni_identificado = _extraer_dni_del_texto(texto_extraido)
     resultado = await verificar_ocr_dni(sesion, texto_extraido, usuario, db)
     documento = DocumentoIdentidad(
         usuario_id=sesion.usuario_id,  # usar el usuario_id actualizado (puede ser el real)
         tipo_documento="DNI",
         ruta_archivo="memoria",
         texto_extraido=texto_extraido,
+        dni_extraido=dni_identificado,
         validado=resultado == "exito",
     )
     db.add(documento)

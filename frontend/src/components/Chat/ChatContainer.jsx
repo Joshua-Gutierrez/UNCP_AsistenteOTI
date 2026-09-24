@@ -183,8 +183,8 @@ export default function ChatContainer() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-base)] flex items-center justify-center p-4 font-sans">
-      <div className="w-full max-w-2xl h-[90vh] max-h-[800px] card flex flex-col overflow-hidden animate-fade-in">
+    <div className="flex-1 w-full bg-[var(--color-bg-base)] flex items-center justify-center sm:p-4 font-sans">
+      <div className="w-full h-full sm:h-[85vh] sm:max-h-[800px] sm:max-w-3xl flex flex-col overflow-hidden animate-fade-in bg-[var(--color-bg-card)] sm:border sm:border-[var(--color-border-subtle)] sm:rounded-2xl sm:shadow-md">
 
         {/* Header */}
         <header className="flex items-center justify-between p-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-card)]">
@@ -251,11 +251,10 @@ export default function ChatContainer() {
                   </div>
                 )}
                 <div
-                  className={`p-3.5 shadow-sm text-[15px] ${
-                    msg.remitente === 'usuario'
+                  className={`p-3.5 shadow-sm text-[15px] ${msg.remitente === 'usuario'
                       ? 'bg-[var(--color-brand-primary)] text-white rounded-2xl rounded-tr-sm'
                       : 'bg-[var(--color-bg-card)] border border-[var(--color-border-subtle)] text-[var(--color-text-primary)] rounded-2xl rounded-tl-sm'
-                  }`}
+                    }`}
                 >
                   <p className="whitespace-pre-wrap leading-relaxed text-sm md:text-base">{formatMessage(msg.contenido)}</p>
                 </div>
@@ -340,7 +339,7 @@ export default function ChatContainer() {
           </form>
 
           <p className="mt-3 text-center text-xs text-[var(--color-text-tertiary)]">
-            Opciones rápidas: <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-bg-base)] border border-[var(--color-border-strong)] font-mono text-[var(--color-brand-primary)]">1</kbd> Pagos · <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-bg-base)] border border-[var(--color-border-strong)] font-mono text-[var(--color-brand-primary)]">2</kbd> Claves · <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-bg-base)] border border-[var(--color-border-strong)] font-mono text-[var(--color-brand-primary)]">0</kbd> Volver al inicio
+            Opciones rápidas:<kbd className="px-1.5 py-0.5 rounded bg-[var(--color-bg-base)] border border-[var(--color-border-strong)] font-mono text-[var(--color-brand-primary)]">2</kbd> Claves · <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-bg-base)] border border-[var(--color-border-strong)] font-mono text-[var(--color-brand-primary)]">0</kbd> Volver al inicio
           </p>
         </footer>
       </div>
