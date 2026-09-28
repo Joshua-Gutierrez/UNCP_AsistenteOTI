@@ -25,6 +25,42 @@ button, input, select, textarea {
 /* React Flow scoping: prevent generic button styles from breaking handles */
 button:not(.react-flow__handle) {
   cursor: pointer;
+  position: relative;
+  transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.2s ease;
+}
+
+button:not(.react-flow__handle):not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Glowing Colorful Border Effect on Hover */
+button:not(.react-flow__handle):not(:disabled)::after {
+  content: "";
+  position: absolute;
+  inset: -2px; /* 2px border thickness */
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(90deg, #4285F4, #9B72CB, #D96570, #F4B400, #34A853, #4285F4);
+  background-size: 200% auto;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  animation: shine-border 3s linear infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+button:not(.react-flow__handle):not(:disabled):hover::after {
+  opacity: 1;
+}
+
+@keyframes shine-border {
+  to {
+    background-position: 200% center;
+  }
 }
 
 a {

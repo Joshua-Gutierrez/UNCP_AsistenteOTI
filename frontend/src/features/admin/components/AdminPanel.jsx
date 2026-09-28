@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FiChevronLeft, FiChevronRight, FiGitBranch, FiLogOut, FiMessageSquare, FiUsers } from 'react-icons/fi';
+import {
+  FiChevronLeft, FiChevronRight, FiGitBranch, FiLogOut,
+  FiMessageSquare, FiUsers, FiRefreshCw, FiCheckCircle,
+  FiSave, FiTrash2, FiX, FiPlus, FiBox, FiMail
+} from 'react-icons/fi';
+import uncpLogo from '../../../assets/logo_uncp.png';
 import {
   ReactFlow,
   Controls,
@@ -62,8 +67,8 @@ function NodoPersonalizado({ data, selected }) {
   const tipoNormalizado = String(data.tipo || '').toLowerCase();
   const colores = tipoNormalizado.startsWith('final') ? TIPO_COLORES.final : TIPO_COLORES[tipoNormalizado] || TIPO_COLORES.opcion;
   const isMenu = data.codigo === 'menu_principal' || tipoNormalizado === 'menu';
-     const isCondicion = tipoNormalizado === 'condicion';
-     const isInactivo = data.activo === false;
+  const isCondicion = tipoNormalizado === 'condicion';
+  const isInactivo = data.activo === false;
 
   return (
     <div
@@ -169,7 +174,7 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [validacion, setValidacion] = useState(null);
-
+  const [panelVisible, setPanelVisible] = useState(true);
   const cargarGrafo = useCallback(async () => {
     try {
       setError(null);
@@ -204,18 +209,18 @@ export default function AdminPanel() {
       const formattedEdges = (edgesData || [])
         .filter((edge) => idsNodosActivos.has(edge.nodo_origen_id) && idsNodosActivos.has(edge.nodo_destino_id))
         .map((edge) => ({
-        id: edge.id,
-        source: edge.nodo_origen_id,
-        target: edge.nodo_destino_id,
-        type: 'custom-edge',
-        animated: true,
-        label: edge.etiqueta || '',
-        data: {
-          etiqueta: edge.etiqueta || '',
-          valor_entrada: edge.valor_entrada || '',
-          orden: edge.orden > 0 ? edge.orden : (Number(edge.valor_entrada) > 0 ? Number(edge.valor_entrada) : null),
-        },
-        style: { stroke: 'var(--color-brand-primary)', strokeWidth: 2 },
+          id: edge.id,
+          source: edge.nodo_origen_id,
+          target: edge.nodo_destino_id,
+          type: 'custom-edge',
+          animated: true,
+          label: edge.etiqueta || '',
+          data: {
+            etiqueta: edge.etiqueta || '',
+            valor_entrada: edge.valor_entrada || '',
+            orden: edge.orden > 0 ? edge.orden : (Number(edge.valor_entrada) > 0 ? Number(edge.valor_entrada) : null),
+          },
+          style: { stroke: 'var(--color-brand-primary)', strokeWidth: 2 },
         }));
 
       setNodes(formattedNodes);
@@ -294,14 +299,14 @@ export default function AdminPanel() {
       const savedEdge = await res.json();
       setEdges((eds) => eds.map(e => e.id === edgeId
         ? {
-            ...e,
-            id: savedEdge.id,
-            data: {
-              etiqueta: savedEdge.etiqueta || '',
-              valor_entrada: savedEdge.valor_entrada || '',
-              orden: savedEdge.orden > 0 ? savedEdge.orden : null,
-            },
-          }
+          ...e,
+          id: savedEdge.id,
+          data: {
+            etiqueta: savedEdge.etiqueta || '',
+            valor_entrada: savedEdge.valor_entrada || '',
+            orden: savedEdge.orden > 0 ? savedEdge.orden : null,
+          },
+        }
         : e));
       await validarArbol();
     } catch (err) {
@@ -433,6 +438,7 @@ export default function AdminPanel() {
   }, []);
 
   const onNodeClick = useCallback((_, node) => {
+    setPanelVisible(true);
     setNodoEditandoId(node.id);
     setFormCodigo(node.data.codigo);
     setFormTipo(node.data.tipo);
@@ -445,6 +451,7 @@ export default function AdminPanel() {
   }, []);
 
   const onEdgeClick = useCallback((_, edge) => {
+    setPanelVisible(true);
     setEdgeEditandoId(edge.id);
     setFormEtiqueta(edge.data?.etiqueta || edge.label || '');
     setFormOrden(Number(edge.data?.orden || 1));
@@ -610,7 +617,7 @@ export default function AdminPanel() {
 
   const handleDeleteNodo = async () => {
     if (!nodoEditandoId) return;
-    
+
     const result = await MySwal.fire({
       title: '¿Desactivar nodo?',
       text: 'Se eliminarán sus conexiones. Podrás reactivarlo después desde el editor.',
@@ -619,7 +626,7 @@ export default function AdminPanel() {
       confirmButtonText: 'Sí, desactivar',
       cancelButtonText: 'Cancelar'
     });
-    
+
     if (!result.isConfirmed) return;
 
     try {
@@ -647,7 +654,7 @@ export default function AdminPanel() {
 
   const handleDeleteEdge = async () => {
     if (!edgeEditandoId) return;
-    
+
     const result = await MySwal.fire({
       title: '¿Eliminar conexión?',
       text: 'Esta acción no se puede deshacer.',
@@ -656,7 +663,7 @@ export default function AdminPanel() {
       confirmButtonText: 'Sí, eliminar',
       cancelButtonText: 'Cancelar'
     });
-    
+
     if (!result.isConfirmed) return;
 
     try {
@@ -704,321 +711,369 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className={`admin-dashboard admin-editor-shell ${sidebarCollapsed ? 'admin-dashboard--sidebar-collapsed' : ''}`} onPointerDown={onEditorPointerDown}>
-      <aside className="admin-sidebar">
-        <div className="admin-sidebar__top">
-          <Link to="/admin" className="admin-brand"><strong>UNCP</strong><span>Asistente</span></Link>
-          <button type="button" className="admin-sidebar__toggle" onClick={() => setSidebarCollapsed((collapsed) => !collapsed)} aria-label={sidebarCollapsed ? 'Mostrar menú' : 'Ocultar menú'} title={sidebarCollapsed ? 'Mostrar menú' : 'Ocultar menú'}>
-            {sidebarCollapsed ? <FiChevronRight /> : <FiChevronLeft />}
+    <div className="flex h-screen bg-[#f4f7f9] font-sans text-gray-800 overflow-hidden" onPointerDown={onEditorPointerDown}>
+      <aside className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-20' : 'w-64'} shrink-0 z-10`}>
+        <div className="h-[72px] flex items-center px-4 border-b border-gray-100 shrink-0">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 rounded-lg bg-white border border-gray-100 flex items-center justify-center p-1 shadow-sm shrink-0">
+              <img src={uncpLogo} alt="Logo UNCP" className="w-full h-full object-contain" />
+            </div>
+            {!sidebarCollapsed && (
+              <div className="flex flex-col whitespace-nowrap">
+                <span className="text-sm font-bold leading-tight text-[#093c2b]">UNCP Asistente</span>
+                <span className="text-[11px] text-gray-500">Plataforma Institucional</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-4 flex-1 overflow-y-auto">
+          {!sidebarCollapsed && <p className="text-[11px] font-bold text-gray-400 mb-3 tracking-wider">MÓDULOS DE GESTIÓN</p>}
+          <nav className="flex flex-col gap-1.5">
+            <Link to="/admin" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-gray-600 hover:bg-gray-50`} title="Bandeja de Mensajes">
+              <FiMessageSquare className="text-gray-400" size={18} />
+              {!sidebarCollapsed && <span>Bandeja de Mensajes</span>}
+            </Link>
+            <Link to="/admin" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-gray-600 hover:bg-gray-50`} title="Perfiles de Usuarios">
+              <FiUsers className="text-gray-400" size={18} />
+              {!sidebarCollapsed && <span>Perfiles de Usuarios</span>}
+            </Link>
+            <Link to="/admin/editor" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors bg-[#093c2b] text-white shadow-sm`} title="Flujo de Respuesta">
+              <FiGitBranch className="text-emerald-400" size={18} />
+              {!sidebarCollapsed && <span>Flujo de Respuesta</span>}
+            </Link>
+          </nav>
+        </div>
+
+        <div className="p-4 border-t border-gray-100 mt-auto flex flex-col gap-4">
+          <button onClick={logout} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors w-full" title="Cerrar sesión">
+            <FiLogOut className="text-gray-400" size={18} />
+            {!sidebarCollapsed && <span>Cerrar sesión</span>}
           </button>
+          {!sidebarCollapsed && <p className="text-[11px] font-medium text-gray-400 px-3">UNCP v2.4</p>}
         </div>
-        <nav className="admin-nav" aria-label="Navegación de administración">
-          <Link to="/admin" className="admin-nav__item"><FiMessageSquare /><span>Mensajes</span></Link>
-          <Link to="/admin" className="admin-nav__item"><FiUsers /><span>Perfiles</span></Link>
-          <Link to="/admin/editor" className="admin-nav__item admin-nav__item--active"><FiGitBranch /><span>Flujo de respuesta</span></Link>
-        </nav>
-        <button type="button" className="admin-nav__item admin-nav__logout" onClick={logout}><FiLogOut /><span>Cerrar sesión</span></button>
       </aside>
-      <main className="admin-editor-main">
-      <div className="min-h-screen bg-[var(--color-bg-base)] text-[var(--color-text-primary)] p-4 md:p-6 font-sans">
-        <div className="container h-[calc(100vh-2rem)] flex flex-col">
 
-        {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 animate-fade-in">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">Editor Visual de Flujo</h1>
-            <p className="text-[var(--color-text-muted)] text-sm mt-1">
-              Arrastra nodos, conéctalos, edita condiciones. Código único por nodo.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={agregarClusterDNI}
-              className="btn btn-secondary flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
-              </svg>
-              CREAR NODO DNI
-            </button>
-            <button
-              type="button"
-              onClick={agregarClusterGmail}
-              className="btn btn-tertiary flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              CREAR NODO GMAIL
-            </button>
-            <button
-              onClick={cargarGrafo}
-              disabled={loading}
-              className="btn btn-outline flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Recargar
-            </button>
-            <button
-              onClick={validarArbol}
-              className="btn btn-tertiary flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Validar
-            </button>
-          </div>
-        </header>
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        <div className="flex-1 flex flex-col p-4 md:p-6 pb-2 min-h-0">
 
-        {/* Error Alert */}
-        {error && (
-          <div className="alert alert-error animate-fade-in mb-6" role="alert">
-            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* Validation Strip */}
-        {validacion && !validacion.valido && (
-          <div className="alert alert-warning animate-fade-in mb-6" role="alert">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 font-medium mb-2">
-                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                </svg>
-                Problemas de validación del árbol
-              </div>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                {validacion.problemas.map((p, i) => (
-                  <li key={i}>{p}</li>
-                ))}
-              </ul>
+          {/* Header */}
+          <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 animate-fade-in shrink-0 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+            <div>
+              <h1 className="text-xl font-bold text-[#093c2b]">Editor Visual de Flujo</h1>
+              <p className="text-gray-500 text-sm mt-0.5">
+                Arrastra nodos, conéctalos, edita condiciones. Código único por nodo.
+              </p>
             </div>
-            <button
-              onClick={() => setValidacion({ valido: true, problemas: [] })}
-              className="flex-shrink-0 text-[var(--color-brand-primary)] font-medium hover:underline"
-            >
-              Ocultar
-            </button>
-          </div>
-        )}
-
-        <div className="flow-editor-layout">
-        {/* Form Panel */}
-        <form onSubmit={handleSubmitNodo} className="card flow-editor-form p-4 md:p-5 animate-slide-in">
-          {/* Editing Node */}
-          {nodoEditandoId && (
-            <div className="flex flex-col gap-3 flex-wrap">
-              <div className="flex-1 min-w-[200px]">
-                <label className="label">Código único</label>
-                <input
-                  type="text"
-                  value={formCodigo}
-                  disabled
-                  className="input bg-[var(--color-bg-base)] cursor-not-allowed"
-                />
-              </div>
-              <div className="flex-1 min-w-[280px]">
-                <label className="label">Contenido / Mensaje</label>
-                <textarea
-                  rows="7"
-                  placeholder="Mensaje que enviará el bot..."
-                  value={formContenido}
-                  onChange={(e) => setFormContenido(e.target.value)}
-                  className="input message-textarea"
-                />
-              </div>
-              <div className="w-full sm:w-40">
-                <label className="label">Tipo</label>
-                <select
-                  value={formTipo}
-                  onChange={(e) => setFormTipo(e.target.value)}
-                  className="input"
-                >
-                  {NODOS_TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-                <p className="node-type-help">{NODOS_TIPOS.find((tipo) => tipo.value === formTipo)?.description}</p>
-              </div>
-              {formTipo === 'FINAL' && (
-                <div className="w-full">
-                  <label className="label">Bandeja del caso final</label>
-                  <select value={formBandejaDestino} onChange={(e) => setFormBandejaDestino(e.target.value)} className="input">
-                    {BANDEJAS_FINALES.map((bandeja) => <option key={bandeja.value} value={bandeja.value}>{bandeja.label}</option>)}
-                  </select>
-                </div>
-              )}
-              <div className="w-full sm:w-28 flex items-end">
-                <label className="flex items-center gap-2 cursor-pointer w-full">
-                  <input
-                    type="checkbox"
-                    checked={formActivo}
-                    onChange={(e) => setFormActivo(e.target.checked)}
-                    className="w-4 h-4 accent-[var(--color-brand-primary)] border-[var(--color-border-strong)] rounded bg-[var(--color-bg-elevated)]"
-                  />
-                  <span className="text-sm font-medium text-[var(--color-text-primary)]">Activo</span>
-                </label>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="submit" className="btn btn-secondary flex-1 sm:flex-none justify-center">Actualizar Nodo</button>
-                <button type="button" onClick={resetFormularioNodo} className="btn btn-outline flex-1 sm:flex-none justify-center">Cancelar</button>
-                <button type="button" onClick={handleDeleteNodo} className="btn btn-danger flex-1 sm:flex-none justify-center">Eliminar Nodo</button>
-              </div>
-            </div>
-          )}
-
-          {/* Editing Edge */}
-          {edgeEditandoId && !nodoEditandoId && (
-            <div className="flex flex-col gap-3 flex-wrap">
-              <div className="flex gap-3">
-                <div className="w-24">
-                  <label className="label">Número</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={formOrden}
-                    onChange={(e) => setFormOrden(e.target.value)}
-                    className="input"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="label">Nombre de la etiqueta</label>
-                  <input
-                    type="text"
-                    placeholder="ej: Soporte"
-                    value={formEtiqueta}
-                    onChange={(e) => setFormEtiqueta(e.target.value)}
-                    className="input"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={handleSubmitEdge} className="btn btn-tertiary flex-1 sm:flex-none justify-center">Guardar Opción</button>
-                <button type="button" onClick={() => { setEdgeEditandoId(null); setFormEtiqueta(''); setFormOrden(1); }} className="btn btn-outline flex-1 sm:flex-none justify-center">Cancelar</button>
-                <button type="button" onClick={handleDeleteEdge} className="btn btn-danger flex-1 sm:flex-none justify-center">Eliminar Conexión</button>
-              </div>
-            </div>
-          )}
-
-          {/* Creating New Node */}
-          {!nodoEditandoId && !edgeEditandoId && (
-            <div className="flex flex-col gap-3 flex-wrap">
-              <div className="flex-1 min-w-[200px]">
-                <label className="label">Código único <span className="text-[var(--color-danger-base)]">*</span></label>
-                <input
-                  type="text"
-                  placeholder="ej: menu_principal"
-                  value={formCodigo}
-                  onChange={(e) => setFormCodigo(e.target.value)}
-                  className="input"
-                  required
-                />
-              </div>
-              <div className="flex-1 min-w-[280px]">
-                <label className="label">Contenido / Mensaje <span className="text-[var(--color-danger-base)]">*</span></label>
-                <textarea
-                  rows="7"
-                  placeholder="Mensaje que enviará el bot..."
-                  value={formContenido}
-                  onChange={(e) => setFormContenido(e.target.value)}
-                  className="input message-textarea"
-                  required
-                />
-              </div>
-              <div className="w-full sm:w-40">
-                <label className="label">Tipo</label>
-                <select
-                  value={formTipo}
-                  onChange={(e) => setFormTipo(e.target.value)}
-                  className="input"
-                >
-                  {NODOS_TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-                <p className="node-type-help">{NODOS_TIPOS.find((tipo) => tipo.value === formTipo)?.description}</p>
-              </div>
-              {formTipo === 'FINAL' && (
-                <div className="w-full">
-                  <label className="label">Bandeja del caso final</label>
-                  <select value={formBandejaDestino} onChange={(e) => setFormBandejaDestino(e.target.value)} className="input">
-                    {BANDEJAS_FINALES.map((bandeja) => <option key={bandeja.value} value={bandeja.value}>{bandeja.label}</option>)}
-                  </select>
-                </div>
-              )}
-              <div className="w-full sm:w-28 flex items-end">
-                <label className="flex items-center gap-2 cursor-pointer w-full">
-                  <input
-                    type="checkbox"
-                    checked={formActivo}
-                    onChange={(e) => setFormActivo(e.target.checked)}
-                    className="w-4 h-4 accent-[var(--color-brand-primary)] border-[var(--color-border-strong)] rounded bg-[var(--color-bg-elevated)]"
-                  />
-                  <span className="text-sm font-medium text-[var(--color-text-primary)]">Activo</span>
-                </label>
-              </div>
-              <button type="button" onClick={limpiarSeleccion} className="btn btn-outline flex-1 sm:flex-none justify-center self-end sm:self-center">
-                Nuevo nodo
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={agregarClusterDNI}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
+              >
+                <FiBox className="text-emerald-600" size={16} />
+                CREAR NODO DNI
               </button>
-              <button type="submit" className="btn btn-primary flex-1 sm:flex-none justify-center self-end sm:self-center">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                Crear Nodo Nuevo
+              <button
+                type="button"
+                onClick={agregarClusterGmail}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
+              >
+                <FiMail className="text-rose-500" size={16} />
+                CREAR NODO GMAIL
+              </button>
+              <button
+                onClick={cargarGrafo}
+                disabled={loading}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                <FiRefreshCw size={15} className="text-blue-500" />
+                Recargar
+              </button>
+              <button
+                onClick={validarArbol}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-white bg-[#093c2b] rounded-lg shadow-sm hover:bg-[#062c1f] transition"
+              >
+                <FiCheckCircle size={15} />
+                Validar
+              </button>
+            </div>
+          </header>
+
+          {/* Error Alert */}
+          {error && (
+            <div className="alert alert-error animate-fade-in mb-6" role="alert">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Validation Strip */}
+          {validacion && !validacion.valido && (
+            <div className="alert alert-warning animate-fade-in mb-6" role="alert">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 font-medium mb-2">
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                  </svg>
+                  Problemas de validación del árbol
+                </div>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  {validacion.problemas.map((p, i) => (
+                    <li key={i}>{p}</li>
+                  ))}
+                </ul>
+              </div>
+              <button
+                onClick={() => setValidacion({ valido: true, problemas: [] })}
+                className="flex-shrink-0 text-[var(--color-brand-primary)] font-medium hover:underline"
+              >
+                Ocultar
               </button>
             </div>
           )}
-        </form>
 
-        {/* Canvas */}
-        <div className="flow-editor-canvas flex-1 card relative overflow-hidden animate-fade-in">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onInit={onInit}
-            onNodeClick={onNodeClick}
-            onEdgeClick={onEdgeClick}
-            onPaneClick={onPaneClick}
-            onNodeDragStop={handleNodeDragStop}
-            nodesDraggable={true}
-            nodesConnectable={true}
-            elementsSelectable={true}
-            connectionMode="loose"
-            nodeTypes={{ custom: NodoPersonalizado }}
-            edgeTypes={{ 'custom-edge': EdgeConEtiqueta }}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-            attributionPosition="bottom-left"
-          >
-            <Controls
-              className="bg-[var(--color-bg-card)] border-[var(--color-border-strong)] text-[var(--color-text-primary)] shadow-lg"
-            />
-            <Background color="var(--color-border-strong)" gap={20} size={1} />
-          </ReactFlow>
+          <div className="flex-1 flex flex-col md:flex-row min-h-0 gap-4">
 
-          {/* Empty State */}
-          {nodes.length === 0 && (
-            <div className="empty-state absolute inset-0 pointer-events-none">
-              <div className="empty-state-icon">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                </svg>
-              </div>
-              <h3 className="empty-state-title">Lienzo vacío</h3>
-              <p className="empty-state-text">Usa el formulario superior → "Crear Nodo Nuevo" para empezar</p>
-              <p className="text-xs mt-2" style={{ color: 'var(--color-text-tertiary)' }}>El primer nodo debe tener código: <code className="px-1 rounded bg-[var(--color-bg-base)] font-mono text-[var(--color-brand-primary)]">menu_principal</code></p>
+            {/* Canvas */}
+            <div className="flow-editor-canvas flex-1 min-w-0 bg-[#0f1115] rounded-xl border border-gray-200 shadow-sm relative overflow-hidden animate-fade-in">
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onInit={onInit}
+                onNodeClick={onNodeClick}
+                onEdgeClick={onEdgeClick}
+                onPaneClick={onPaneClick}
+                onNodeDragStop={handleNodeDragStop}
+                nodesDraggable={true}
+                nodesConnectable={true}
+                elementsSelectable={true}
+                connectionMode="loose"
+                nodeTypes={{ custom: NodoPersonalizado }}
+                edgeTypes={{ 'custom-edge': EdgeConEtiqueta }}
+                defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+                attributionPosition="bottom-left"
+              >
+                <Controls
+                  className="bg-[#181a20] border-[#404552] text-gray-300 shadow-lg"
+                />
+                <Background color="#404552" gap={20} size={1} />
+              </ReactFlow>
+
+              {/* Empty State */}
+              {nodes.length === 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none p-6">
+                  <div className="w-16 h-16 bg-[#181a20] text-gray-500 rounded-full flex items-center justify-center mb-4 border border-[#2d313a]">
+                    <FiBox size={32} />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-200">Lienzo vacío</h3>
+                  <p className="text-gray-400 max-w-sm mt-1">Usa el panel lateral para "Crear Nodo Nuevo" y comenzar tu flujo.</p>
+                  <p className="text-xs mt-3 text-gray-500 font-medium">El primer nodo debe tener código: <code className="px-1.5 py-0.5 rounded bg-[#181a20] text-emerald-400 border border-[#2d313a]">menu_principal</code></p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        </div>
 
+            {/* Form Panel (Sidebar) */}
+            <div className={`flow-editor-form shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden animate-fade-in z-10 transition-all duration-300 ${panelVisible ? 'w-full md:w-80 lg:w-[360px]' : 'w-14'}`}>
+              <div className={`p-4 border-b border-gray-100 bg-gray-50 flex shrink-0 ${panelVisible ? 'justify-between items-center' : 'flex-col items-center justify-center h-full border-b-0'}`}>
+                {panelVisible && (
+                  <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase whitespace-nowrap overflow-hidden">
+                    {nodoEditandoId ? 'Editar Nodo' : edgeEditandoId ? 'Editar Conexión' : 'Crear Nuevo Nodo'}
+                  </h3>
+                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  {(nodoEditandoId || edgeEditandoId) && panelVisible && (
+                    <button type="button" onClick={limpiarSeleccion} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-md hover:bg-gray-200" title="Cerrar edición">
+                      <FiX size={16} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPanelVisible(!panelVisible)}
+                    className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-md hover:bg-gray-200 bg-white shadow-sm border border-gray-200"
+                    title={panelVisible ? "Ocultar panel" : "Mostrar panel"}
+                  >
+                    {panelVisible ? <FiChevronRight size={18} /> : <FiChevronLeft size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className={`p-5 overflow-y-auto flex-1 custom-scrollbar ${panelVisible ? 'block' : 'hidden'}`}>
+                <form onSubmit={handleSubmitNodo} className="flex flex-col gap-5">
+                  {/* Editing Node */}
+                  {nodoEditandoId && (
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-gray-500 tracking-wider">CÓDIGO ÚNICO</label>
+                        <input
+                          type="text"
+                          value={formCodigo}
+                          disabled
+                          className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg text-gray-500 cursor-not-allowed"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-gray-500 tracking-wider">CONTENIDO / MENSAJE</label>
+                        <textarea
+                          rows="5"
+                          value={formContenido}
+                          onChange={(e) => setFormContenido(e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-700 outline-none focus:border-[#093c2b] focus:ring-1 focus:ring-[#093c2b] resize-y"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-gray-500 tracking-wider">TIPO</label>
+                        <select
+                          value={formTipo}
+                          onChange={(e) => setFormTipo(e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-700 outline-none focus:border-[#093c2b] focus:ring-1 focus:ring-[#093c2b]"
+                        >
+                          {NODOS_TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                      </div>
+                      {formTipo === 'FINAL' ? (
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-gray-500 tracking-wider">BANDEJA DESTINO</label>
+                          <select value={formBandejaDestino} onChange={(e) => setFormBandejaDestino(e.target.value)} className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-700 outline-none focus:border-[#093c2b] focus:ring-1 focus:ring-[#093c2b]">
+                            {BANDEJAS_FINALES.map((bandeja) => <option key={bandeja.value} value={bandeja.value}>{bandeja.label}</option>)}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={formActivo}
+                              onChange={(e) => setFormActivo(e.target.checked)}
+                              className="w-4 h-4 text-[#093c2b] border-gray-300 rounded focus:ring-[#093c2b]"
+                            />
+                            <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">Activo</span>
+                          </label>
+                        </div>
+                      )}
+
+                      <div className="pt-2 flex flex-col gap-2">
+                        <button type="submit" className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-white bg-[#093c2b] rounded-lg shadow-sm hover:bg-[#062c1f] transition">
+                          <FiSave size={16} /> Guardar Cambios
+                        </button>
+                        <button type="button" onClick={handleDeleteNodo} className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-rose-600 bg-white border border-rose-200 rounded-lg hover:bg-rose-50 transition">
+                          <FiTrash2 size={16} /> Desactivar / Eliminar
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Editing Edge */}
+                  {edgeEditandoId && !nodoEditandoId && (
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-gray-500 tracking-wider">NÚMERO</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={formOrden}
+                          onChange={(e) => setFormOrden(e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-700 outline-none focus:border-[#093c2b] focus:ring-1 focus:ring-[#093c2b]"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-gray-500 tracking-wider">ETIQUETA (CONDICIÓN)</label>
+                        <input
+                          type="text"
+                          placeholder="ej: Soporte"
+                          value={formEtiqueta}
+                          onChange={(e) => setFormEtiqueta(e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-700 outline-none focus:border-[#093c2b] focus:ring-1 focus:ring-[#093c2b]"
+                        />
+                      </div>
+                      <div className="pt-2 flex flex-col gap-2">
+                        <button type="button" onClick={handleSubmitEdge} className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-white bg-[#093c2b] rounded-lg shadow-sm hover:bg-[#062c1f] transition">
+                          <FiSave size={16} /> Guardar Conexión
+                        </button>
+                        <button type="button" onClick={handleDeleteEdge} className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-rose-600 bg-white border border-rose-200 rounded-lg hover:bg-rose-50 transition">
+                          <FiTrash2 size={16} /> Eliminar Conexión
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Creating New Node */}
+                  {!nodoEditandoId && !edgeEditandoId && (
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-gray-500 tracking-wider">CÓDIGO ÚNICO <span className="text-rose-500">*</span></label>
+                        <input
+                          type="text"
+                          placeholder="ej: menu_principal"
+                          value={formCodigo}
+                          onChange={(e) => setFormCodigo(e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-700 outline-none focus:border-[#093c2b] focus:ring-1 focus:ring-[#093c2b]"
+                          required
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-gray-500 tracking-wider">CONTENIDO / MENSAJE <span className="text-rose-500">*</span></label>
+                        <textarea
+                          rows="5"
+                          placeholder="Mensaje que enviará el bot..."
+                          value={formContenido}
+                          onChange={(e) => setFormContenido(e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-700 outline-none focus:border-[#093c2b] focus:ring-1 focus:ring-[#093c2b] resize-y"
+                          required
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-gray-500 tracking-wider">TIPO</label>
+                        <select
+                          value={formTipo}
+                          onChange={(e) => setFormTipo(e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-700 outline-none focus:border-[#093c2b] focus:ring-1 focus:ring-[#093c2b]"
+                        >
+                          {NODOS_TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                        <p className="text-[11px] text-gray-400 mt-1">{NODOS_TIPOS.find((tipo) => tipo.value === formTipo)?.description}</p>
+                      </div>
+                      {formTipo === 'FINAL' ? (
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-gray-500 tracking-wider">BANDEJA DESTINO</label>
+                          <select value={formBandejaDestino} onChange={(e) => setFormBandejaDestino(e.target.value)} className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-700 outline-none focus:border-[#093c2b] focus:ring-1 focus:ring-[#093c2b]">
+                            {BANDEJAS_FINALES.map((bandeja) => <option key={bandeja.value} value={bandeja.value}>{bandeja.label}</option>)}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={formActivo}
+                              onChange={(e) => setFormActivo(e.target.checked)}
+                              className="w-4 h-4 text-[#093c2b] border-gray-300 rounded focus:ring-[#093c2b]"
+                            />
+                            <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">Activo</span>
+                          </label>
+                        </div>
+                      )}
+
+                      <div className="pt-2 flex flex-col gap-2">
+                        <button type="submit" className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-white bg-[#093c2b] rounded-lg shadow-sm hover:bg-[#062c1f] transition">
+                          <FiPlus size={16} /> Crear Nodo
+                        </button>
+                        <button type="button" onClick={limpiarSeleccion} className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                          Limpiar Campos
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </form>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
       </main>
     </div>
   );
