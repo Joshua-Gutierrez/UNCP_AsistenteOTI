@@ -24,7 +24,7 @@ async def es_nodo_terminal(db: AsyncSession, nodo: NodoFlujo) -> bool:
     return len(opciones) == 0
 
 
-async def _crear_caso_si_corresponde(db: AsyncSession, sesion: SesionChat, nodo: NodoFlujo) -> None:
+async def _crear_caso_si_corresponde(db: AsyncSession, sesion: SesionChat, nodo: NodoFlujo) -> str | None:
     if not await es_nodo_terminal(db, nodo):
         return
 
@@ -40,10 +40,19 @@ async def _crear_caso_si_corresponde(db: AsyncSession, sesion: SesionChat, nodo:
     else:
         return
 
+    import uuid
+    from uuid_extensions import uuid7
+    from app.utils import generar_codigo_ticket
+    nuevo_id = uuid7()
+    codigo_ticket = generar_codigo_ticket()
+
     caso = Caso(
+        id=nuevo_id,
         tipo=tipo_consulta,
         mensaje=nodo.contenido,
         estado=estado,
+        codigo_ticket=codigo_ticket,
+        sesion_id=sesion.id,
     )
     db.add(caso)
     await db.commit()
@@ -54,6 +63,29 @@ async def _crear_caso_si_corresponde(db: AsyncSession, sesion: SesionChat, nodo:
         await notificar_nuevo_caso(caso)
     except Exception:
         pass
+
+    if estado in ("manual", "solicitud_soporte"):
+        from app.utils import generar_link_whatsapp
+        
+        if estado == "solicitud_soporte":
+            mensaje_wa = (
+                f"Hola, requiero soporte técnico.\n"
+                f"🎫 Ticket: {caso.codigo_ticket}\n"
+                f"📝 Asunto: {tipo_consulta.capitalize()}\n\n"
+                f"Por favor, ayúdenme con mi caso."
+            )
+        else:
+            mensaje_wa = (
+                f"Hola, necesito comunicarme con un asesor.\n"
+                f"🎫 Ticket: {caso.codigo_ticket}\n"
+                f"📝 Área: {tipo_consulta.capitalize()}\n\n"
+                f"Tengo la siguiente consulta:"
+            )
+            
+        link = generar_link_whatsapp(mensaje_wa)
+        return f"Tu código de seguimiento es {caso.codigo_ticket}, guárdalo para consultar el estado de tu solicitud.\n\nPara comunicarte con un asesor, haz clic en el siguiente enlace:\n{link}"
+
+    return None
 
 
 def _registrar_nodo(sesion: SesionChat, nodo: NodoFlujo) -> None:
@@ -205,7 +237,9 @@ async def _manejar_accion_correo(
             _registrar_nodo(sesion, destino_baneado)
             ctx = sesion.contexto or {}
             mensajes, nodo_final = await _seguir_cadena_automatica(db, sesion, destino_baneado, ctx)
-            await _crear_caso_si_corresponde(db, sesion, nodo_final)
+            link_msg = await _crear_caso_si_corresponde(db, sesion, nodo_final)
+            if link_msg:
+                mensajes.append(link_msg)
             return mensajes
         # Fallback si no hay nodo conectado
         return [
@@ -234,7 +268,9 @@ async def _manejar_accion_correo(
         ctx = sesion.contexto or {}
         # Recopilar el mensaje de CADA nodo atravesado automáticamente
         mensajes, nodo_final = await _seguir_cadena_automatica(db, sesion, destino_exito, ctx)
-        await _crear_caso_si_corresponde(db, sesion, nodo_final)
+        link_msg = await _crear_caso_si_corresponde(db, sesion, nodo_final)
+        if link_msg:
+            mensajes.append(link_msg)
         return mensajes
 
     return ["Verificación exitosa. Continuando el chat."]
@@ -341,10 +377,13 @@ async def procesar_respuesta(
         flag_modified(sesion, "contexto")
         return [destino.contenido]
 
+    mensajes = [await construir_mensaje_nodo(db, destino)]
     if await es_nodo_terminal(db, destino):
-        await _crear_caso_si_corresponde(db, sesion, destino)
+        link_msg = await _crear_caso_si_corresponde(db, sesion, destino)
+        if link_msg:
+            mensajes.append(link_msg)
 
-    return [await construir_mensaje_nodo(db, destino)]
+    return mensajes
 
 
 async def procesar_imagen(
@@ -376,6 +415,8 @@ async def procesar_imagen(
     # No agregar contenido_inicial por separado para evitar duplicados
     mensajes_nuevos, nodo_final = await _seguir_cadena_automatica(db, sesion, destino, ctx)
     
-    await _crear_caso_si_corresponde(db, sesion, nodo_final)
+    link_msg = await _crear_caso_si_corresponde(db, sesion, nodo_final)
+    if link_msg:
+        mensajes_nuevos.append(link_msg)
 
     return mensajes_nuevos

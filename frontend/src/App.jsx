@@ -8,6 +8,7 @@ import AdminDashboard from './features/admin/components/AdminDashboard';
 import ProtectedAdminRoute from './features/admin/components/ProtectedAdminRoute';
 
 const AdminPanelPage = lazy(() => import('./pages/AdminPanelPage'));
+const TrackingPage = lazy(() => import('./pages/TrackingPage'));
 
 function App() {
   return (
@@ -53,10 +54,15 @@ function App() {
 
 function AppShell() {
   return (
-    <div className="min-h-screen bg-[var(--color-bg)] flex flex-col">
+    <div className="min-h-[100dvh] bg-[var(--color-bg)] flex flex-col">
       <main className="flex-1 flex flex-col min-h-0">
         <Routes>
           <Route path="/" element={<ChatContainer />} />
+          <Route path="/seguimiento" element={
+            <Suspense fallback={<div className="flex items-center justify-center h-full">Cargando...</div>}>
+              <TrackingPage />
+            </Suspense>
+          } />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route 
             path="/admin/editor" 

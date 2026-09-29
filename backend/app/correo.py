@@ -10,7 +10,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.core.config import configuracion
 from app.models.usuario import Usuario
 
-
+StopAsyncIteration
 def generar_codigo() -> str:
     """Genera un código de 6 dígitos con padding de ceros, usando secrets (criptográficamente seguro)."""
     return f"{secrets.randbelow(1_000_000):06d}"

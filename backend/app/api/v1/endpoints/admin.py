@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect, status, Body
 from app import crud
 from sqlmodel import select, update
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -19,11 +19,20 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 # --- Autenticación ---
 
-async def admin_actual(sesion_admin: str | None = Cookie(default=None)) -> str:
+async def admin_actual(sesion_admin: str | None = Cookie(default=None), session: AsyncSession = Depends(get_session)) -> str:
     admin_id = decodificar_token(sesion_admin) if sesion_admin else None
     if not admin_id:
         raise HTTPException(status_code=401, detail="Sesión inválida o expirada")
-    return admin_id
+    import uuid
+    try:
+        uid = uuid.UUID(admin_id)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Sesión inválida o expirada")
+    
+    admin = await session.get(Admin, uid)
+    if not admin or not admin.activo:
+        raise HTTPException(status_code=401, detail="Cuenta desactivada o eliminada")
+    return str(admin.id)
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
@@ -93,6 +102,24 @@ async def marcar_atendido(
     session.add(caso)
     await session.commit()
     return {"ok": True}
+
+@router.get("/casos/{caso_id}/mensajes")
+async def obtener_mensajes_caso(
+    caso_id: str,
+    session: AsyncSession = Depends(get_session),
+    admin_id: str = Depends(admin_actual)
+):
+    import uuid
+    caso = await session.get(Caso, uuid.UUID(caso_id))
+    if not caso:
+        raise HTTPException(status_code=404, detail="Caso no encontrado")
+    
+    if not caso.sesion_id:
+        return []
+    
+    from app.models.mensaje import Mensaje
+    mensajes = await session.exec(select(Mensaje).where(Mensaje.sesion_id == caso.sesion_id).order_by(Mensaje.creado_en))
+    return mensajes.all()
 
 # --- WebSocket Dashboard ---
 
@@ -404,3 +431,184 @@ async def registrar_auditoria(
     )
     db.add(entrada)
     await db.commit()
+
+# --- Gestión de Administradores ---
+from datetime import date, datetime, timezone
+import io
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func, text
+from openpyxl import Workbook
+from app.schemas.admin import AdminIn, AdminOut
+
+async def requerir_superadmin(admin_id: str = Depends(admin_actual), session: AsyncSession = Depends(get_session)):
+    import uuid
+    admin = await session.get(Admin, uuid.UUID(admin_id))
+    if not admin or admin.rol != "superadmin":
+        raise HTTPException(403, "Solo un superadministrador puede gestionar cuentas.")
+    return admin
+
+@router.get("/administradores", response_model=list[AdminOut])
+async def listar_administradores(db: AsyncSession = Depends(get_session), _=Depends(requerir_superadmin)):
+    resultado = await db.execute(select(Admin))
+    return resultado.scalars().all()
+
+@router.post("/administradores", response_model=AdminOut)
+async def crear_administrador(datos: AdminIn, db: AsyncSession = Depends(get_session), _=Depends(requerir_superadmin)):
+    existente = await crud.get_admin_por_correo(db, datos.correo)
+    if existente:
+        raise HTTPException(400, "El correo ya está registrado.")
+    
+    nuevo_admin = Admin(
+        correo=datos.correo,
+        nombre=datos.nombre,
+        password_hash=hashear_password(datos.password),
+        rol=datos.rol,
+    )
+    db.add(nuevo_admin)
+    await db.commit()
+    await db.refresh(nuevo_admin)
+    return nuevo_admin
+
+@router.patch("/administradores/{id}/activo")
+async def cambiar_estado_administrador(id: str, activo: bool, db: AsyncSession = Depends(get_session), _=Depends(requerir_superadmin)):
+    import uuid
+    admin = await db.get(Admin, uuid.UUID(id))
+    if not admin:
+        raise HTTPException(404, "Administrador no encontrado.")
+    admin.activo = activo
+    await db.commit()
+    return {"ok": True, "activo": activo}
+
+# --- Finalizar Atención ---
+
+@router.patch("/casos/{caso_id}/finalizar")
+async def finalizar_atencion(
+    caso_id: str, 
+    nota_cierre: str | None = Body(default=None, embed=True),
+    db: AsyncSession = Depends(get_session), 
+    admin_id: str = Depends(admin_actual)
+):
+    import uuid
+    caso = await db.get(Caso, uuid.UUID(caso_id))
+    if not caso:
+        raise HTTPException(404, "Caso no encontrado.")
+    caso.estado = "finalizado"
+    caso.finalizado_en = datetime.now(timezone.utc)
+    caso.atendido_por = uuid.UUID(admin_id)
+    if nota_cierre:
+        caso.nota_cierre = nota_cierre
+    await db.commit()
+    return {"ok": True, "estado": "finalizado"}
+
+# --- Reportes ---
+
+@router.get("/reportes/atenciones")
+async def reporte_atenciones(
+    fecha_inicio: date, fecha_fin: date,
+    db: AsyncSession = Depends(get_session), admin_id: str = Depends(admin_actual),
+):
+    from app.models.sesion_chat import SesionChat
+    from app.models.usuario import Usuario
+    from datetime import timedelta
+    
+    fecha_fin_inclusive = fecha_fin + timedelta(days=1)
+    
+    resultado = await db.execute(
+        select(
+            Admin.nombre.label("admin_nombre"),
+            Usuario.nombre.label("usuario_nombre"),
+            Usuario.email.label("usuario_email"),
+            Usuario.dni.label("usuario_dni"),
+            Caso.codigo_ticket,
+            Caso.nota_cierre,
+            Caso.creado_en,
+            Caso.finalizado_en,
+            func.timestampdiff(text("SECOND"), Caso.creado_en, Caso.finalizado_en).label("tiempo_segundos")
+        )
+        .join(Caso, Caso.atendido_por == Admin.id)
+        .outerjoin(SesionChat, Caso.sesion_id == SesionChat.id)
+        .outerjoin(Usuario, SesionChat.usuario_id == Usuario.id)
+        .where(
+            Caso.finalizado_en >= fecha_inicio,
+            Caso.finalizado_en < fecha_fin_inclusive
+        )
+        .order_by(Caso.finalizado_en.desc())
+    )
+    datos = resultado.all()
+    return [
+        {
+            "admin_nombre": row.admin_nombre,
+            "usuario_nombre": row.usuario_nombre or "Anónimo",
+            "usuario_email": row.usuario_email or "N/A",
+            "usuario_dni": row.usuario_dni or "N/A",
+            "codigo_ticket": row.codigo_ticket or "S/T",
+            "nota_cierre": row.nota_cierre or "",
+            "creado_en": row.creado_en,
+            "finalizado_en": row.finalizado_en,
+            "tiempo_minutos": round((float(row.tiempo_segundos) or 0) / 60, 2)
+        }
+        for row in datos
+    ]
+
+@router.get("/reportes/atenciones/exportar")
+async def exportar_reporte_excel(
+    fecha_inicio: date, fecha_fin: date,
+    db: AsyncSession = Depends(get_session), admin_id: str = Depends(admin_actual),
+):
+    from app.models.sesion_chat import SesionChat
+    from app.models.usuario import Usuario
+    from datetime import timedelta
+    
+    fecha_fin_inclusive = fecha_fin + timedelta(days=1)
+
+    resultado = await db.execute(
+        select(
+            Admin.nombre.label("admin_nombre"),
+            Usuario.nombre.label("usuario_nombre"),
+            Usuario.email.label("usuario_email"),
+            Usuario.dni.label("usuario_dni"),
+            Caso.codigo_ticket,
+            Caso.nota_cierre,
+            Caso.creado_en,
+            Caso.finalizado_en,
+            func.timestampdiff(text("SECOND"), Caso.creado_en, Caso.finalizado_en).label("tiempo_segundos")
+        )
+        .join(Caso, Caso.atendido_por == Admin.id)
+        .outerjoin(SesionChat, Caso.sesion_id == SesionChat.id)
+        .outerjoin(Usuario, SesionChat.usuario_id == Usuario.id)
+        .where(
+            Caso.finalizado_en >= fecha_inicio,
+            Caso.finalizado_en < fecha_fin_inclusive
+        )
+        .order_by(Caso.finalizado_en.desc())
+    )
+    datos = resultado.all()
+
+    libro = Workbook()
+    hoja = libro.active
+    hoja.title = "Reporte de Atenciones"
+    hoja.append(["Administrador", "Estudiante", "DNI", "Correo", "Ticket", "Nota Cierre", "Inicio", "Fin", "Tiempo (min)"])
+    
+    for fila in datos:
+        minutos = round((float(fila.tiempo_segundos) or 0) / 60, 2) if fila.tiempo_segundos else 0
+        hoja.append([
+            fila.admin_nombre,
+            fila.usuario_nombre or "Anónimo",
+            fila.usuario_dni or "N/A",
+            fila.usuario_email or "N/A",
+            fila.codigo_ticket or "S/T",
+            fila.nota_cierre or "",
+            fila.creado_en.strftime("%Y-%m-%d %H:%M:%S") if fila.creado_en else "",
+            fila.finalizado_en.strftime("%Y-%m-%d %H:%M:%S") if fila.finalizado_en else "",
+            minutos
+        ])
+
+    buffer = io.BytesIO()
+    libro.save(buffer)
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=reporte_{fecha_inicio}_a_{fecha_fin}.xlsx"},
+    )

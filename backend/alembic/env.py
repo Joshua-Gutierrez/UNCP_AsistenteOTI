@@ -18,7 +18,9 @@ if config.config_file_name is not None:
 target_metadata = SQLModel.metadata
 
 # Sobrescribir la URL de conexión usando las variables de entorno de tu app
-config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+from dotenv import load_dotenv
+load_dotenv()
+config.set_main_option("sqlalchemy.url", os.environ.get("DATABASE_URL", ""))
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")

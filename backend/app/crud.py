@@ -28,9 +28,34 @@ async def get_admin_por_correo(db: AsyncSession, correo: str) -> Admin | None:
     resultado = await db.exec(select(Admin).where(Admin.correo == correo))
     return resultado.first()
 
-async def get_casos_por_estado(db: AsyncSession, estado: str) -> list[Caso]:
-    resultado = await db.exec(select(Caso).where(Caso.estado == estado).order_by(Caso.creado_en.desc()))
-    return resultado.all()
+async def get_casos_por_estado(db: AsyncSession, estado: str):
+    statement = (
+        select(Caso, Usuario)
+        .outerjoin(SesionChat, Caso.sesion_id == SesionChat.id)
+        .outerjoin(Usuario, SesionChat.usuario_id == Usuario.id)
+        .where(Caso.estado == estado)
+        .order_by(Caso.creado_en.desc())
+    )
+    resultados = await db.exec(statement)
+    
+    casos_out = []
+    for caso, usuario in resultados:
+        # Create a dictionary starting with Caso fields
+        caso_dict = caso.model_dump()
+        
+        # Merge user data if present, otherwise set to anonymous
+        if usuario:
+            caso_dict["usuario_nombre"] = usuario.nombre
+            caso_dict["usuario_dni"] = usuario.dni
+            caso_dict["usuario_email"] = usuario.email
+            caso_dict["rol"] = usuario.rol
+        else:
+            caso_dict["usuario_nombre"] = "Anónimo"
+            caso_dict["rol"] = "anónimo"
+            
+        casos_out.append(caso_dict)
+        
+    return casos_out
 
 async def get_mensajes_por_sesion(db: AsyncSession, sesion_id) -> list[Mensaje]:
     resultado = await db.exec(select(Mensaje).where(Mensaje.sesion_id == sesion_id).order_by(Mensaje.creado_en.asc()))
@@ -66,3 +91,13 @@ async def get_opciones_de_nodo(db: AsyncSession, nodo_id) -> list[tuple[OpcionFl
         .where(OpcionFlujo.nodo_origen_id == nodo_id)
     )
     return resultado.all()
+
+async def buscar_caso_por_dni_y_ticket(db: AsyncSession, dni: str, ticket: str):
+    statement = (
+        select(Caso)
+        .join(SesionChat, Caso.sesion_id == SesionChat.id)
+        .join(Usuario, SesionChat.usuario_id == Usuario.id)
+        .where(Usuario.dni == dni, Caso.codigo_ticket == ticket)
+    )
+    resultado = await db.exec(statement)
+    return resultado.first()

@@ -55,10 +55,17 @@ class OpcionIn(BaseModel):
 
 class CasoOut(BaseModel):
     id: UUID
+    codigo_ticket: Optional[str] = None
     tipo: str
     mensaje: str
     estado: str
     creado_en: datetime
+    
+    # Datos del usuario (se llenan en el endpoint)
+    usuario_nombre: Optional[str] = None
+    usuario_dni: Optional[str] = None
+    usuario_email: Optional[str] = None
+    rol: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -66,3 +73,20 @@ class CasoOut(BaseModel):
 class ValidacionArbol(BaseModel):
     valido: bool
     problemas: list[str]
+
+class AdminIn(BaseModel):
+    correo: EmailStr
+    nombre: str
+    password: str
+    rol: str = "operador"
+
+class AdminOut(BaseModel):
+    id: UUID
+    correo: EmailStr
+    nombre: str
+    rol: str
+    activo: bool
+    creado_en: datetime
+
+    class Config:
+        from_attributes = True

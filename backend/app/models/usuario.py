@@ -13,6 +13,7 @@ class Usuario(SQLModel, table=True):
     nombre: str = Field(max_length=150)
     email: str = Field(unique=True, index=True, max_length=150)
     dni: str = Field(unique=True, index=True, max_length=9)
+    rol: str = Field(default="estudiante", max_length=20)  # estudiante, administrativo, docente, etc.
     activo: bool = Field(default=True)
     creado_en: datetime = Field(
         default_factory=get_now_lima,

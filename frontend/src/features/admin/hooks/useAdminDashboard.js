@@ -16,9 +16,11 @@ export function useAdminDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
+    let ws = null;
 
     async function loadCases() {
       try {
@@ -40,25 +42,58 @@ export function useAdminDashboard() {
     }
 
     loadCases();
-    return () => { active = false; };
-  }, [navigate]);
+
+    function connectWebSocket() {
+      // API_BASE is http://localhost:8000/api/v1/admin
+      // WebSocket URL is ws://localhost:8000/api/v1/admin/ws/dashboard
+      const wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws/dashboard';
+      ws = new WebSocket(wsUrl);
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.evento === 'nuevo_caso') {
+            loadCases(); // Actualizar inmediatamente el dashboard
+          }
+        } catch (e) {
+          console.error('Error procesando evento WebSocket', e);
+        }
+      };
+
+      ws.onclose = () => {
+        if (active) {
+          setTimeout(connectWebSocket, 5000); // reconexión
+        }
+      };
+    }
+
+    connectWebSocket();
+
+    return () => { 
+      active = false; 
+      if (ws) ws.close();
+    };
+  }, [navigate, refreshKey]);
 
   useEffect(() => {
     if (view !== 'profiles') return undefined;
     let active = true;
-    fetch(`${API_BASE}/perfiles`, { credentials: 'include' })
+    fetch(`${API_BASE}/administradores`, { credentials: 'include' })
       .then((response) => {
         if (response.status === 401) {
           navigate('/admin/login', { replace: true });
           throw new Error('Sesión expirada');
         }
-        if (!response.ok) throw new Error('No se pudieron cargar los perfiles.');
+        if (response.status === 403) {
+          throw new Error('No tienes permisos de superadministrador para ver esto.');
+        }
+        if (!response.ok) throw new Error('No se pudieron cargar los administradores.');
         return response.json();
       })
       .then((data) => { if (active) setProfiles(data); })
       .catch((loadError) => { if (active) setError(loadError.message); });
     return () => { active = false; };
-  }, [navigate, view]);
+  }, [navigate, view, refreshKey]);
 
   async function logout() {
     await fetch(`${API_BASE}/logout`, { method: 'POST', credentials: 'include' });
@@ -75,6 +110,55 @@ export function useAdminDashboard() {
     navigate('/admin/editor', { state: { sidebarCollapsed: true } });
   }
 
+  async function finalizarAtencion(casoId, nota_cierre) {
+    try {
+      const response = await fetch(`${API_BASE}/casos/${casoId}/finalizar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nota_cierre }),
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error('Error al finalizar la atención');
+      setRefreshKey(prev => prev + 1);
+      return true;
+    } catch (err) {
+      alert(err.message);
+      return false;
+    }
+  }
+
+  async function toggleAdminStatus(adminId, activo) {
+    try {
+      const response = await fetch(`${API_BASE}/administradores/${adminId}/activo?activo=${activo}`, {
+        method: 'PATCH',
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        if (response.status === 403) throw new Error('Solo un superadministrador puede hacer esto.');
+        throw new Error('Error al cambiar estado.');
+      }
+      setRefreshKey(prev => prev + 1);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function createAdmin(adminData) {
+    const response = await fetch(`${API_BASE}/administradores`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(adminData)
+    });
+    if (!response.ok) {
+      if (response.status === 403) throw new Error('Solo un superadministrador puede hacer esto.');
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error al crear administrador.');
+    }
+    setRefreshKey(prev => prev + 1);
+    return await response.json();
+  }
+
   return {
     cases,
     profiles,
@@ -84,6 +168,9 @@ export function useAdminDashboard() {
     error,
     logout,
     selectView,
-    openEditor
+    openEditor,
+    finalizarAtencion,
+    toggleAdminStatus,
+    createAdmin
   };
 }

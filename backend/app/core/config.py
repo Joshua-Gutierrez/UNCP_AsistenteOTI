@@ -13,6 +13,9 @@ class Configuracion(BaseSettings):
     smtp_password: str = os.environ.get("SMTP_PASSWORD", "")
     smtp_remitente: str = os.environ.get("SMTP_REMITENTE", "")
 
+    # WhatsApp
+    whatsapp_numero_universidad: str = os.environ.get("WHATSAPP_NUMERO_UNIVERSIDAD", "")
+
     class Config:
         env_file = ".env"
         case_sensitive = False

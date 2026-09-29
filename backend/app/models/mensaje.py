@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, Text
 from sqlmodel import SQLModel, Field
 from uuid_extensions import uuid7
 
@@ -12,7 +12,7 @@ class Mensaje(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid7, primary_key=True, index=True)
     sesion_id: uuid.UUID = Field(foreign_key="sesiones_chat.id", index=True)
     remitente: str = Field(max_length=50)  # 'usuario' o 'bot'
-    contenido: str
+    contenido: str = Field(sa_column=Column(Text))
     creado_en: datetime = Field(
         default_factory=get_now_lima,
         sa_column=Column(DateTime(timezone=True), nullable=False),

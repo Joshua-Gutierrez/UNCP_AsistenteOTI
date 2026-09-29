@@ -3,12 +3,172 @@ import {
   FiChevronLeft, FiChevronRight, FiHeadphones, FiKey, FiMail, 
   FiMessageSquare, FiSettings, FiUsers, FiGitBranch, FiLogOut,
   FiSearch, FiDownload, FiRefreshCw, FiClock, FiCheckCircle, 
-  FiAlertCircle, FiPhone, FiEye, FiActivity, FiExternalLink
+  FiAlertCircle, FiPhone, FiEye, FiActivity, FiExternalLink, FiX, FiCpu, FiUser, FiPieChart
 } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
+import toast, { Toaster } from 'react-hot-toast';
 import uncpLogo from '../../../assets/logo_uncp.png';
 
 const API_BASE = 'http://localhost:8000/api/v1/admin';
+
+function ChatHistoryModal({ caso, onClose }) {
+  const [mensajes, setMensajes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/casos/${caso.id}/mensajes`, {credentials: 'include'})
+      .then(r => r.json())
+      .then(data => {
+        setMensajes(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(e => {
+        console.error(e);
+        setLoading(false);
+      });
+  }, [caso.id]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-[#f4f7f9] rounded-2xl w-full max-w-lg shadow-xl overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <div className="bg-white px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-800 text-lg leading-tight">Historial de Conversación</h2>
+            <p className="text-xs text-gray-500 font-mono mt-0.5">Ticket: {caso.codigo_ticket || `#${String(caso.id).substring(0,8).toUpperCase()}`} • DNI: {caso.dni || caso.usuario_dni || 'N/A'}</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 rounded-full transition">
+            <FiX size={20} />
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+          {loading ? (
+            <div className="flex justify-center p-10"><FiRefreshCw className="animate-spin text-gray-400" size={24}/></div>
+          ) : mensajes.length === 0 ? (
+            <div className="text-center text-gray-400 py-10 text-sm">No se encontró historial para esta sesión.</div>
+          ) : (
+            mensajes.map((m, i) => {
+              const isBot = m.remitente !== 'usuario';
+              return (
+                <div key={i} className={`flex gap-3 max-w-[85%] ${isBot ? 'self-start' : 'self-end flex-row-reverse'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${isBot ? 'bg-[#093c2b] text-white' : 'bg-gray-200 text-gray-600'}`}>
+                    {isBot ? <FiCpu size={14}/> : <FiUser size={14}/>}
+                  </div>
+                  <div className={`p-3 rounded-2xl text-sm shadow-sm ${isBot ? 'bg-white text-gray-700 rounded-tl-none border border-gray-100' : 'bg-[#093c2b] text-white rounded-tr-none'}`}>
+                    {m.contenido.split('\\n').map((line, idx) => (
+                      <span key={idx} className="block">{line}</span>
+                    ))}
+                    <div className={`text-[9px] mt-1.5 ${isBot ? 'text-gray-400' : 'text-emerald-200 text-right'}`}>
+                      {new Date(m.creado_en).toLocaleTimeString('es-PE', {hour: '2-digit', minute:'2-digit'})}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NewAdminModal({ onClose, onCreate }) {
+  const [nombre, setNombre] = useState('');
+  const [correo, setCorreo] = useState('');
+  const [password, setPassword] = useState('');
+  const [rol, setRol] = useState('admin');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await onCreate({ nombre, correo, password, rol });
+      onClose();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+          <h2 className="font-bold text-gray-800">Nuevo Administrador</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">
+            <FiX size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre Completo</label>
+            <input required type="text" value={nombre} onChange={e => setNombre(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md outline-none focus:border-[#093c2b] text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Correo Electrónico</label>
+            <input required type="email" value={correo} onChange={e => setCorreo(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md outline-none focus:border-[#093c2b] text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Contraseña</label>
+            <input required type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md outline-none focus:border-[#093c2b] text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Rol</label>
+            <select value={rol} onChange={e => setRol(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md outline-none focus:border-[#093c2b] text-sm">
+              <option value="admin">Administrador Regular</option>
+              <option value="superadmin">Superadministrador</option>
+            </select>
+          </div>
+          <button disabled={loading} type="submit" className="mt-4 bg-[#093c2b] text-white py-2.5 rounded-md font-medium hover:bg-[#062c1f] transition disabled:opacity-50 text-sm">
+            {loading ? 'Creando...' : 'Crear Administrador'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function FinalizarModal({ onClose, onConfirm }) {
+  const [nota, setNota] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    await onConfirm(nota);
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+          <h2 className="font-bold text-gray-700">Finalizar Atención</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
+            <FiX size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-2">Nota de Cierre (Opcional)</label>
+            <textarea 
+              value={nota} 
+              onChange={e => setNota(e.target.value)} 
+              placeholder="¿Qué se hizo para resolver el caso?" 
+              className="w-full px-3 py-2 border border-gray-300 rounded-md outline-none focus:border-[#093c2b] text-sm resize-none h-20"
+            />
+          </div>
+          <button disabled={loading} type="submit" className="w-full bg-[#093c2b] text-white py-2.5 rounded-md font-medium hover:bg-[#062c1f] transition disabled:opacity-50 text-sm flex justify-center items-center gap-2">
+            {loading ? <FiRefreshCw className="animate-spin" /> : <FiCheckCircle />}
+            Confirmar y Cerrar
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 const columns = [
   { key: 'atendido', title: 'Atendidos', accent: 'emerald', dot: 'bg-emerald-500' },
@@ -43,8 +203,9 @@ function timeAgo(date) {
   return formatDate(date);
 }
 
-function CaseCard({ caso, columnKey }) {
-  const role = caso.rol || caso.tipo_usuario || 'Estudiante';
+function CaseCard({ caso, columnKey, onOpenChat, onFinalizarAtencion }) {
+  const rawRole = caso.rol || caso.tipo_usuario || 'Estudiante';
+  const role = rawRole.charAt(0).toUpperCase() + rawRole.slice(1).toLowerCase();
   const title = caso.titulo || caso.asunto || caso.mensaje || 'Consulta sin asunto';
   const dni = caso.dni || caso.usuario_dni || 'Sin DNI';
   const name = caso.nombre || caso.usuario_nombre || 'Usuario';
@@ -71,12 +232,17 @@ function CaseCard({ caso, columnKey }) {
             <p className="text-xs text-gray-500 font-mono mt-0.5">DNI {maskDni(dni)}</p>
           </div>
         </div>
-        <span className={`text-[10px] px-2 py-0.5 rounded font-medium
-          ${isAtendido ? 'bg-blue-50 text-blue-700' : 
-            isManual ? 'bg-blue-50 text-blue-700' : 
-            'bg-rose-50 text-rose-700'}`}>
-          {role}
-        </span>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <span className={`text-[10px] px-2 py-0.5 rounded font-medium
+            ${isAtendido ? 'bg-blue-50 text-blue-700' : 
+              isManual ? 'bg-blue-50 text-blue-700' : 
+              'bg-rose-50 text-rose-700'}`}>
+            {role}
+          </span>
+          <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded uppercase border border-gray-100">
+            {caso.codigo_ticket ? caso.codigo_ticket : `#${String(caso.id).substring(0, 8)}`}
+          </span>
+        </div>
       </div>
 
       <div className="text-xs text-gray-600 flex flex-col gap-1.5">
@@ -94,49 +260,56 @@ function CaseCard({ caso, columnKey }) {
         ${isAtendido ? 'bg-blue-50/50' : 
           isManual ? 'bg-blue-50/50' : 
           'bg-blue-50/50'}`}>
-        <div className="flex justify-between items-center text-[10px] font-semibold text-gray-500 mb-1">
-          <span>{isSoporte ? 'TRÁMITE' : 'PROCEDIMIENTO'}</span>
-          {isAtendido && <span className="text-emerald-600 flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded-full"><FiCheckCircle/> Autenticado OCR</span>}
-          {isManual && <span className="text-amber-600 flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded-full"><FiHeadphones/> Operador Asignado</span>}
-          {isSoporte && <span className="text-rose-600 flex items-center gap-1 bg-rose-50 px-1.5 py-0.5 rounded-full">Espera: 8 min</span>}
-        </div>
-        <p className="font-medium text-gray-800 text-sm">{title}</p>
+
         
-        {isManual && (
-          <p className="text-gray-600 italic mt-1 relative pl-2 border-l-2 border-amber-300">
-            "Por favor autorizar ampliación de vacante..."
+        {caso.mensaje && (
+          <p className="text-gray-600 italic mt-1 relative pl-2 border-l-2 border-blue-300">
+            "{caso.mensaje}"
           </p>
-        )}
-        {isAtendido && (
-          <p className="text-gray-500 mt-1">Validación biométrica exitosa. Guía de matrícula enviada automáticamente al buzón del alumno.</p>
-        )}
-        {isSoporte && (
-          <p className="text-gray-500 mt-1">Error al sincronizar actas finales en la plataforma institucional. Traba en cierre de ciclo.</p>
         )}
       </div>
 
-      <div className="flex items-center justify-between mt-auto pt-2">
-        <div className="flex items-center gap-2">
-          {isAtendido && <span className="text-[10px] text-gray-400 flex items-center gap-1"><FiClock/> {timeAgo(caso.creado_en) || 'Hace 12 min'}</span>}
-          {!isAtendido && <button className="text-xs font-semibold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-md hover:bg-blue-100 transition">Ver conversación</button>}
-          {isAtendido && <button className="text-xs font-semibold text-gray-700 bg-gray-100 px-3 py-1.5 rounded-md hover:bg-gray-200 transition">Detalles</button>}
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 mt-auto pt-2">
+        <span className="text-[10px] text-gray-400 flex items-center gap-1 min-w-fit shrink-0"><FiClock/> {timeAgo(caso.creado_en)}</span>
         
-        {isAtendido && (
-          <button className="text-xs font-semibold text-white bg-[#093c2b] px-3 py-1.5 rounded-md hover:bg-[#062c1f] transition flex items-center gap-1 shadow-sm">
-            <FiEye/> Ver conversación
-          </button>
-        )}
-        {isManual && (
-          <button className="text-xs font-semibold text-white bg-[#855318] px-3 py-1.5 rounded-md hover:bg-[#6b4213] transition flex items-center gap-1 shadow-sm">
-            <FiPhone/> Contactar en Vivo
-          </button>
-        )}
-        {isSoporte && (
-          <button className="text-xs font-semibold text-white bg-[#093c2b] px-3 py-1.5 rounded-md hover:bg-[#062c1f] transition flex items-center gap-1 shadow-sm">
-            <FiExternalLink/> Contactar
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+          {!isAtendido && (
+            <button onClick={() => onOpenChat(caso)} className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition flex items-center gap-1 shadow-sm shrink-0">
+              Ver conversación
+            </button>
+          )}
+          
+          {isAtendido && (
+            <>
+              <button onClick={() => alert('Próximamente: Detalles')} className="text-[11px] font-semibold text-gray-700 bg-gray-100 px-2.5 py-1.5 rounded-md hover:bg-gray-200 transition shrink-0">Detalles</button>
+              <button onClick={() => onOpenChat(caso)} className="text-[11px] font-semibold text-white bg-[#093c2b] px-2.5 py-1.5 rounded-md hover:bg-[#062c1f] transition flex items-center gap-1 shadow-sm shrink-0">
+                <FiEye/> Ver conversación
+              </button>
+            </>
+          )}
+          
+          {isManual && (
+            <>
+              <button onClick={() => alert('Próximamente: Iniciar chat en vivo')} className="text-[11px] font-semibold text-white bg-[#855318] px-2.5 py-1.5 rounded-md hover:bg-[#6b4213] transition flex items-center gap-1 shadow-sm shrink-0">
+                <FiPhone/> Contactar
+              </button>
+              <button onClick={onFinalizarAtencion} className="text-[11px] font-semibold text-white bg-[#093c2b] px-2.5 py-1.5 rounded-md hover:bg-[#062c1f] transition flex items-center gap-1 shadow-sm shrink-0">
+                Finalizar Atención
+              </button>
+            </>
+          )}
+          
+          {isSoporte && (
+            <>
+              <button onClick={() => alert('Próximamente: Iniciar contacto')} className="text-[11px] font-semibold text-white bg-[#093c2b] px-2.5 py-1.5 rounded-md hover:bg-[#062c1f] transition flex items-center gap-1 shadow-sm shrink-0">
+                <FiExternalLink/> Contactar
+              </button>
+              <button onClick={onFinalizarAtencion} className="text-[11px] font-semibold text-white bg-[#093c2b] px-2.5 py-1.5 rounded-md hover:bg-[#062c1f] transition flex items-center gap-1 shadow-sm shrink-0">
+                Finalizar Atención
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -154,11 +327,40 @@ export default function AdminDashboard() {
     error,
     logout,
     selectView,
-    openEditor
+    openEditor,
+    finalizarAtencion,
+    toggleAdminStatus,
+    createAdmin
   } = useAdminDashboard();
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCaso, setSelectedCaso] = useState(null);
+  const [isNewAdminModalOpen, setIsNewAdminModalOpen] = useState(false);
+  const [finalizarCasoId, setFinalizarCasoId] = useState(null);
+
+  const filterCase = (caso) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.trim().toLowerCase();
+    const dni = caso.dni || caso.usuario_dni || '';
+    const email = caso.email || caso.usuario_email || '';
+    const name = caso.nombre || caso.usuario_nombre || '';
+    const ticket = caso.codigo_ticket || caso.ticket || (caso.id ? String(caso.id).substring(0, 8).toUpperCase() : '');
+    
+    return (
+      dni.toLowerCase().includes(term) ||
+      email.toLowerCase().includes(term) ||
+      name.toLowerCase().includes(term) ||
+      ticket.toLowerCase().includes(term) ||
+      ('#' + ticket.toLowerCase()).includes(term)
+    );
+  };
+
+  const allCases = [...(cases.atendido || []), ...(cases.manual || []), ...(cases.solicitud_soporte || [])];
+  const countRole = (roleStr) => allCases.filter(c => (c.rol || c.tipo_usuario || '').toLowerCase().includes(roleStr)).length;
+
+
   return (
-    <div className="flex h-screen bg-[#f4f7f9] font-sans text-gray-800 overflow-hidden">
+    <div className="flex h-[100dvh] bg-[#f4f7f9] font-sans text-gray-800 overflow-hidden">
       
       <aside className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-20' : 'w-64'}`}>
         <div className="h-[72px] flex items-center px-4 border-b border-gray-100 shrink-0">
@@ -202,6 +404,14 @@ export default function AdminDashboard() {
               <FiGitBranch className="text-gray-400" size={18} />
               {!sidebarCollapsed && <span>Flujo de Respuesta</span>}
             </button>
+            <button 
+              onClick={() => selectView('reports')}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${view === 'reports' ? 'bg-[#093c2b] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+              title="Historial de Atenciones"
+            >
+              <FiClock className={view === 'reports' ? 'text-emerald-400' : 'text-gray-400'} size={18} />
+              {!sidebarCollapsed && <span>Historial de Atenciones</span>}
+            </button>
           </nav>
         </div>
 
@@ -237,15 +447,17 @@ export default function AdminDashboard() {
                 <FiSearch size={16} />
                 <input 
                   type="text" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Buscar por DNI, correo institucional o código de ticket..." 
                   className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder-gray-400"
                 />
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button className="px-3 py-1.5 text-xs font-semibold bg-[#093c2b] text-white rounded-lg shadow-sm">Todos (32)</button>
-                <button className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition">Estudiantes (22)</button>
-                <button className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition">Docentes (7)</button>
-                <button className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition">Administrativos (3)</button>
+                <button className="px-3 py-1.5 text-xs font-semibold bg-[#093c2b] text-white rounded-lg shadow-sm">Todos ({allCases.length})</button>
+                <button className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition">Estudiantes ({countRole('estudiante')})</button>
+                <button className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition">Docentes ({countRole('docente')})</button>
+                <button className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition">Administrativos ({countRole('administrativo')})</button>
               </div>
             </div>
           )}
@@ -255,7 +467,7 @@ export default function AdminDashboard() {
               <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
                 <p className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">RESUELTOS POR BOT</p>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-bold text-[#093c2b]">24</span>
+                  <span className="text-3xl font-bold text-[#093c2b]">{cases.atendido?.length || 0}</span>
                   <span className="text-xs font-medium text-gray-500 mb-0.5">casos</span>
                 </div>
                 <div className="mt-2 text-xs font-semibold text-emerald-600 flex items-center gap-1">
@@ -270,7 +482,7 @@ export default function AdminDashboard() {
               <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
                 <p className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">EN ATENCIÓN MANUAL</p>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-bold text-amber-600">3</span>
+                  <span className="text-3xl font-bold text-amber-600">{cases.manual?.length || 0}</span>
                   <span className="text-xs font-medium text-gray-500 mb-0.5">en curso</span>
                 </div>
                 <div className="mt-2 text-xs font-semibold text-amber-600 flex items-center gap-1">
@@ -284,7 +496,7 @@ export default function AdminDashboard() {
               <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
                 <p className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">MESA DE AYUDA / OCR</p>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-bold text-rose-600">5</span>
+                  <span className="text-3xl font-bold text-rose-600">{cases.solicitud_soporte?.length || 0}</span>
                   <span className="text-xs font-medium text-gray-500 mb-0.5">pendientes</span>
                 </div>
                 <div className="mt-2 text-xs font-semibold text-rose-600 flex items-center gap-1">
@@ -323,8 +535,13 @@ export default function AdminDashboard() {
           {view === 'profiles' ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-                <span className="font-semibold text-gray-700">Usuarios creados</span>
-                <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-full">{profiles.length}</span>
+                <div>
+                  <span className="font-semibold text-gray-700">Administradores</span>
+                  <span className="ml-2 bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-full">{profiles.length}</span>
+                </div>
+                <button onClick={() => setIsNewAdminModalOpen(true)} className="text-xs bg-[#093c2b] hover:bg-[#062c1f] text-white px-3 py-1.5 rounded-md font-medium transition">
+                  + Nuevo Administrador
+                </button>
               </div>
               <div className="divide-y divide-gray-100">
                 {profiles.length ? profiles.map((profile) => (
@@ -335,24 +552,115 @@ export default function AdminDashboard() {
                       </div>
                       <div>
                         <h2 className="font-semibold text-gray-800 text-sm">{profile.nombre}</h2>
-                        <p className="text-xs text-gray-500">{profile.email}</p>
+                        <p className="text-xs text-gray-500">{profile.correo}</p>
                       </div>
                     </div>
                     <div className="text-sm">
-                      <span className="text-xs text-gray-400 block">DNI</span>
-                      <strong className="text-gray-700 font-mono">{maskDni(profile.dni)}</strong>
+                      <span className="text-xs text-gray-400 block">Rol</span>
+                      <strong className="text-gray-700 font-mono capitalize">{profile.rol}</strong>
                     </div>
                     <div className="text-sm">
                       <span className="text-xs text-gray-400 block">Registro</span>
                       <strong className="text-gray-700">{formatDate(profile.creado_en)}</strong>
                     </div>
                     <div>
-                      <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${profile.activo ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
-                        {profile.activo ? 'Activo' : 'Inactivo'}
-                      </span>
+                      <button 
+                        onClick={() => toggleAdminStatus(profile.id, !profile.activo)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition ${profile.activo ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {profile.activo ? 'Desactivar' : 'Activar'}
+                      </button>
                     </div>
                   </div>
-                )) : <div className="p-8 text-center text-gray-500 text-sm">No hay perfiles registrados.</div>}
+                )) : <div className="p-8 text-center text-gray-500 text-sm">No hay administradores registrados.</div>}
+              </div>
+            </div>
+          ) : view === 'reports' ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 flex flex-col min-h-[400px]">
+              <div className="flex flex-col items-center justify-center mb-8">
+                <FiClock className="text-gray-300 mb-4" size={48} />
+                <h2 className="text-xl font-bold text-gray-700 mb-2">Historial de Atenciones</h2>
+                <p className="text-gray-500 text-sm text-center max-w-md">Selecciona un rango de fechas para visualizar y exportar el detalle de las atenciones finalizadas (estudiante, ticket, nota de resolución, etc).</p>
+              </div>
+              
+              <div className="flex gap-4 items-end mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100 justify-center">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-600">Fecha Inicio</label>
+                  <input type="date" id="report_start" className="px-3 py-2 border border-gray-300 rounded-md text-sm outline-none focus:border-[#093c2b]" defaultValue={new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-600">Fecha Fin</label>
+                  <input type="date" id="report_end" className="px-3 py-2 border border-gray-300 rounded-md text-sm outline-none focus:border-[#093c2b]" defaultValue={new Date().toISOString().split('T')[0]} />
+                </div>
+                <button 
+                  onClick={async () => {
+                    const start = document.getElementById('report_start').value;
+                    const end = document.getElementById('report_end').value;
+                    if (!start || !end) return alert('Selecciona ambas fechas');
+                    const btn = document.getElementById('btn-preview');
+                    btn.innerText = 'Cargando...';
+                    try {
+                      const res = await fetch(`http://localhost:8000/api/v1/admin/reportes/atenciones?fecha_inicio=${start}&fecha_fin=${end}`, {
+                        credentials: 'include'
+                      });
+                      const data = await res.json();
+                      const tbody = document.getElementById('report_tbody');
+                      if(data.length === 0) {
+                        tbody.innerHTML = '<tr><td colSpan="7" className="text-center p-4 text-gray-500">No hay atenciones en este rango</td></tr>';
+                      } else {
+                        tbody.innerHTML = data.map(r => `
+                          <tr class="border-b border-gray-50 hover:bg-gray-50">
+                            <td class="p-3 text-xs font-medium text-gray-700">${r.codigo_ticket}</td>
+                            <td class="p-3 text-xs text-gray-600">${r.usuario_nombre}</td>
+                            <td class="p-3 text-xs text-gray-600">${r.usuario_dni}</td>
+                            <td class="p-3 text-xs text-gray-600 max-w-[150px] truncate" title="${r.nota_cierre || ''}">${r.nota_cierre || '-'}</td>
+                            <td class="p-3 text-xs text-gray-600">${r.admin_nombre}</td>
+                            <td class="p-3 text-xs text-gray-600">${new Date(r.finalizado_en).toLocaleString('es-PE')}</td>
+                            <td class="p-3 text-xs font-bold text-gray-700">${r.tiempo_minutos} min</td>
+                          </tr>
+                        `).join('');
+                      }
+                      document.getElementById('report_preview').classList.remove('hidden');
+                    } catch (e) {
+                      alert('Error al cargar reporte');
+                    }
+                    btn.innerText = 'Generar Vista Previa';
+                  }}
+                  id="btn-preview"
+                  className="bg-gray-800 text-white px-4 py-2 rounded-md font-medium text-sm hover:bg-gray-700 transition h-[38px]"
+                >
+                  Generar Vista Previa
+                </button>
+                <button 
+                  onClick={() => {
+                    const start = document.getElementById('report_start').value;
+                    const end = document.getElementById('report_end').value;
+                    if (!start || !end) return alert('Selecciona ambas fechas');
+                    window.open(`http://localhost:8000/api/v1/admin/reportes/atenciones/exportar?fecha_inicio=${start}&fecha_fin=${end}`, '_blank');
+                  }}
+                  className="bg-[#093c2b] text-white px-4 py-2 rounded-md font-medium text-sm hover:bg-[#062c1f] transition h-[38px]"
+                >
+                  Exportar a Excel
+                </button>
+              </div>
+
+              <div id="report_preview" className="hidden w-full overflow-hidden border border-gray-200 rounded-lg">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50 text-gray-500 border-b border-gray-200">
+                      <tr>
+                        <th className="p-3 text-xs font-semibold">Ticket</th>
+                        <th className="p-3 text-xs font-semibold">Estudiante</th>
+                        <th className="p-3 text-xs font-semibold">DNI</th>
+                        <th className="p-3 text-xs font-semibold">Nota Cierre</th>
+                        <th className="p-3 text-xs font-semibold">Admin. a cargo</th>
+                        <th className="p-3 text-xs font-semibold">Fecha Fin</th>
+                        <th className="p-3 text-xs font-semibold">Demora (min)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="report_tbody" className="bg-white">
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           ) : loading ? (
@@ -369,9 +677,9 @@ export default function AdminDashboard() {
                   </div>
                   
                   <div className="flex-1 overflow-y-auto pr-1">
-                    {cases[column.key].length ? (
-                      cases[column.key].map((caso) => (
-                        <CaseCard key={caso.id} caso={caso} columnKey={column.key} />
+                    {cases[column.key].filter(filterCase).length ? (
+                      cases[column.key].filter(filterCase).map((caso) => (
+                        <CaseCard key={caso.id} caso={caso} columnKey={column.key} onOpenChat={setSelectedCaso} onFinalizarAtencion={() => setFinalizarCasoId(caso.id)} />
                       ))
                     ) : (
                       <div className="h-full flex items-center justify-center p-4 text-center text-sm text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
@@ -385,6 +693,26 @@ export default function AdminDashboard() {
           )}
         </div>
       </main>
+      
+      {selectedCaso && (
+        <ChatHistoryModal caso={selectedCaso} onClose={() => setSelectedCaso(null)} />
+      )}
+      {isNewAdminModalOpen && (
+        <NewAdminModal onClose={() => setIsNewAdminModalOpen(false)} onCreate={createAdmin} />
+      )}
+      {finalizarCasoId && (
+        <FinalizarModal 
+          onClose={() => setFinalizarCasoId(null)} 
+          onConfirm={async (nota) => {
+            const success = await finalizarAtencion(finalizarCasoId, nota);
+            if (success) {
+              toast.success('Atención finalizada correctamente');
+              setFinalizarCasoId(null);
+            }
+          }} 
+        />
+      )}
+      <Toaster position="top-right" />
     </div>
   );
 }

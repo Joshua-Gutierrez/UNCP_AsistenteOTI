@@ -6,6 +6,7 @@ class UsuarioBase(BaseModel):
     nombre: str = Field(max_length=150)
     email: EmailStr
     dni: str = Field(max_length=9)
+    rol: str = "estudiante"
     activo: bool = True
     
 class UsuarioCreate(UsuarioBase):

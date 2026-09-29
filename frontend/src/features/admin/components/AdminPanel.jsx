@@ -698,7 +698,7 @@ export default function AdminPanel() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-base)]">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-[var(--color-bg-base)]">
         <div className="loading-spinner animate-fade-in">
           <svg fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -711,7 +711,7 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="flex h-screen bg-[#f4f7f9] font-sans text-gray-800 overflow-hidden" onPointerDown={onEditorPointerDown}>
+    <div className="flex h-[100dvh] bg-[#f4f7f9] font-sans text-gray-800 overflow-hidden" onPointerDown={onEditorPointerDown}>
       <aside className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-20' : 'w-64'} shrink-0 z-10`}>
         <div className="h-[72px] flex items-center px-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3 overflow-hidden">

@@ -14,7 +14,7 @@ export default function AdminLogin() {
   } = useAdminLogin();
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--color-bg)]">
+    <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-[var(--color-bg)]">
       <div className="w-full max-w-md animate-fade-in">
         {/* Logo/Brand */}
         <div className="text-center mb-8">

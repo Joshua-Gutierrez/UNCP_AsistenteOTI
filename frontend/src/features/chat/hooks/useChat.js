@@ -89,15 +89,19 @@ export function useChat() {
     return () => { activo = false; };
   }, []);
 
-  const manejarEnvio = async (e) => {
-    e.preventDefault();
-    if (!textoInput.trim() || !sesionId || cargando) return;
+  const manejarEnvio = async (e, textoDirecto = null) => {
+    if (e) e.preventDefault();
+    const textoAEnviar = textoDirecto ?? textoInput;
+    if (!textoAEnviar.trim() || !sesionId || cargando) return;
 
-    const nuevoMensajeUsuario = { remitente: 'usuario', contenido: textoInput, timestamp: new Date() };
+    const nuevoMensajeUsuario = { remitente: 'usuario', contenido: textoAEnviar, timestamp: new Date() };
     setMensajes((prev) => [...prev, nuevoMensajeUsuario]);
-    setTextoInput('');
+    if (textoDirecto === null) setTextoInput('');
     setCargando(true);
     setError(null);
+
+    // Forzar scroll al instante
+    requestAnimationFrame(() => scrollToBottom(true));
 
     try {
       const respuestasBot = await sendMessage(sesionId, nuevoMensajeUsuario.contenido);
@@ -105,6 +109,8 @@ export function useChat() {
       setMensajes((prev) => [...prev, ...respuestas.map(r => ({ ...r, timestamp: new Date() }))]);
       const ultimaRespuesta = respuestas[respuestas.length - 1];
       setEsperandoDni(esSolicitudDni(ultimaRespuesta?.contenido));
+      // Forzar scroll tras respuesta
+      requestAnimationFrame(() => scrollToBottom(true));
     } catch (error) {
       console.error("Error de comunicación:", error);
       setError(mensajeAmigable(error?.message));

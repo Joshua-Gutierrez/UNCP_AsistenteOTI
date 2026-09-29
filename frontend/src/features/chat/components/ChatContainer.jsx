@@ -2,6 +2,7 @@ import { useChat } from '../hooks/useChat';
 import ChatHeader from './ChatHeader';
 import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
+import { FiMessageCircle } from 'react-icons/fi';
 
 export default function ChatContainer() {
   const {
@@ -35,13 +36,40 @@ export default function ChatContainer() {
         return (
           <button
             key={i}
-            onClick={() => { setTextoInput(match[1].replace('.', '').trim()); inputRef.current?.focus(); }}
+            onClick={() => { 
+              const opcionTexto = match[1].replace('.', '').trim();
+              manejarEnvio(null, opcionTexto);
+            }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 mt-2 mr-2 bg-white border border-gray-200 text-[#093c2b] font-semibold rounded-full shadow-sm text-sm hover:bg-[#093c2b] hover:text-white transition-colors"
           >
             <span className="opacity-60">{match[1]}</span> {match[2]}
           </button>
         );
       }
+
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      if (urlRegex.test(line)) {
+        const parts = line.split(urlRegex);
+        return (
+          <span key={i} className="block mb-1 last:mb-0 break-words">
+            {parts.map((part, j) => {
+              if (part.match(urlRegex)) {
+                if (part.includes('wa.me')) {
+                  return (
+                    <a key={j} href={part} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 mt-2 px-4 py-2 bg-[#25D366] text-white font-medium rounded-lg hover:bg-[#1DA851] transition shadow-sm decoration-transparent">
+                      <FiMessageCircle size={18} />
+                      Abrir en WhatsApp
+                    </a>
+                  );
+                }
+                return <a key={j} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{part}</a>;
+              }
+              return part;
+            })}
+          </span>
+        );
+      }
+
       return <span key={i} className="block mb-1 last:mb-0">{line}</span>;
     });
   };
