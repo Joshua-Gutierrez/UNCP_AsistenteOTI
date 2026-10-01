@@ -516,14 +516,24 @@ export default function AdminPanel() {
       return;
     }
 
+    let posX = 100;
+    let posY = 100;
+    if (nodoEditandoId) {
+      const nodoActual = nodes.find(n => n.id === nodoEditandoId);
+      if (nodoActual) {
+        posX = Math.round(nodoActual.position.x);
+        posY = Math.round(nodoActual.position.y);
+      }
+    }
+
     const payload = {
       codigo: formCodigo.trim(),
       tipo: formTipo,
       contenido: formContenido.trim(),
       bandeja_destino: formTipo.startsWith('FINAL') ? (formTipo === 'FINAL' ? formBandejaDestino : formTipo === 'FINAL_SOPORTE' ? 'solicitud_soporte' : formTipo === 'FINAL_MANUAL' ? 'manual' : 'atendido') : null,
       activo: formActivo,
-      posicion_x: 100,
-      posicion_y: 100,
+      posicion_x: posX,
+      posicion_y: posY,
     };
 
     try {

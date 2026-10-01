@@ -71,7 +71,7 @@ export default function TrackingPage() {
                 type="text"
                 value={dni}
                 onChange={e => setDni(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#093c2b] focus:border-[#093c2b] outline-none transition"
+                className="w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#093c2b] focus:border-[#093c2b] outline-none transition"
                 placeholder="Ej. 76543210"
                 maxLength={8}
               />
@@ -82,7 +82,7 @@ export default function TrackingPage() {
                 type="text"
                 value={ticket}
                 onChange={e => setTicket(e.target.value.toUpperCase())}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#093c2b] focus:border-[#093c2b] outline-none transition uppercase"
+                className="w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#093c2b] focus:border-[#093c2b] outline-none transition uppercase"
                 placeholder="Ej. UNCP-A3F9"
               />
             </div>
