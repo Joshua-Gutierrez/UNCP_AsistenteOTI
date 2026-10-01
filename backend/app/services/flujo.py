@@ -296,7 +296,8 @@ async def _seguir_cadena_automatica(
     Devuelve la lista de mensajes de TODOS los nodos recorridos (incluido el inicial)
     y el último nodo alcanzado.
     """
-    mensajes: list[str] = [_interpolar_contexto(nodo_inicial.contenido, ctx)]
+    msg_inicial = await construir_mensaje_nodo(db, nodo_inicial)
+    mensajes: list[str] = [_interpolar_contexto(msg_inicial, ctx)]
     nodo = nodo_inicial
 
     for _ in range(profundidad_max):
@@ -312,7 +313,8 @@ async def _seguir_cadena_automatica(
         sesion.nodo_actual_id = destino.id
         _registrar_nodo(sesion, destino)
         nodo = destino
-        mensajes.append(_interpolar_contexto(nodo.contenido, ctx))
+        msg_destino = await construir_mensaje_nodo(db, destino)
+        mensajes.append(_interpolar_contexto(msg_destino, ctx))
 
     return mensajes, nodo
 
@@ -377,9 +379,11 @@ async def procesar_respuesta(
         flag_modified(sesion, "contexto")
         return [destino.contenido]
 
-    mensajes = [await construir_mensaje_nodo(db, destino)]
-    if await es_nodo_terminal(db, destino):
-        link_msg = await _crear_caso_si_corresponde(db, sesion, destino)
+    ctx = sesion.contexto or {}
+    mensajes, nodo_final = await _seguir_cadena_automatica(db, sesion, destino, ctx)
+    
+    if await es_nodo_terminal(db, nodo_final):
+        link_msg = await _crear_caso_si_corresponde(db, sesion, nodo_final)
         if link_msg:
             mensajes.append(link_msg)
 

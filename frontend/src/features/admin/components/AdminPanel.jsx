@@ -484,7 +484,7 @@ export default function AdminPanel() {
   const handleNodeDragStop = useCallback(async (_event, node) => {
     if (!node.id.startsWith('edge-')) {
       try {
-        await fetch(`${API_BASE}/nodos/${node.id}`, {
+        const res = await fetch(`${API_BASE}/nodos/${node.id}`, {
           method: 'PUT',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -492,15 +492,19 @@ export default function AdminPanel() {
             codigo: node.data.codigo,
             tipo: node.data.tipo,
             contenido: node.data.contenido,
-            bandeja_destino: node.data.bandeja_destino,
-            activo: node.data.activo,
+            bandeja_destino: node.data.bandeja_destino || null,
+            activo: node.data.activo ?? true,
             posicion_x: Math.round(node.position.x),
             posicion_y: Math.round(node.position.y),
           }),
         });
+        if (!res.ok) {
+           const errData = await res.json().catch(() => ({}));
+           throw new Error(errData.detail || `Error HTTP ${res.status}`);
+        }
       } catch (err) {
         console.error('Error guardando posición:', err);
-        cargarGrafo();
+        toast.error(`Error guardando posición: ${err.message}`);
       }
     }
   }, [cargarGrafo]);
