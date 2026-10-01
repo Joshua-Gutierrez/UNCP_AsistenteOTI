@@ -337,6 +337,7 @@ export default function AdminDashboard() {
   const [selectedCaso, setSelectedCaso] = useState(null);
   const [isNewAdminModalOpen, setIsNewAdminModalOpen] = useState(false);
   const [finalizarCasoId, setFinalizarCasoId] = useState(null);
+  const adminUser = JSON.parse(sessionStorage.getItem('adminUser') || '{}');
 
   const filterCase = (caso) => {
     if (!searchTerm.trim()) return true;
@@ -370,8 +371,8 @@ export default function AdminDashboard() {
             </div>
             {!sidebarCollapsed && (
               <div className="flex flex-col whitespace-nowrap">
-                <span className="text-sm font-bold leading-tight text-[#093c2b]">UNCP Asistente</span>
-                <span className="text-[11px] text-gray-500">Plataforma Institucional</span>
+                <span className="text-sm font-bold leading-tight text-[#093c2b]">{adminUser?.nombre || 'Administrador'}</span>
+                <span className="text-[11px] text-gray-500 capitalize">{adminUser?.rol || 'Operador'}</span>
               </div>
             )}
           </div>

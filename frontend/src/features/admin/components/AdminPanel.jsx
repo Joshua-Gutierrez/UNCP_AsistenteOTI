@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiChevronLeft, FiChevronRight, FiGitBranch, FiLogOut,
   FiMessageSquare, FiUsers, FiRefreshCw, FiCheckCircle,
-  FiSave, FiTrash2, FiX, FiPlus, FiBox, FiMail
+  FiSave, FiTrash2, FiX, FiPlus, FiBox, FiMail, FiClock
 } from 'react-icons/fi';
 import uncpLogo from '../../../assets/logo_uncp.png';
 import {
@@ -175,6 +175,7 @@ export default function AdminPanel() {
   const [error, setError] = useState(null);
   const [validacion, setValidacion] = useState(null);
   const [panelVisible, setPanelVisible] = useState(true);
+  const adminUser = JSON.parse(sessionStorage.getItem('adminUser') || '{}');
   const cargarGrafo = useCallback(async () => {
     try {
       setError(null);
@@ -734,8 +735,8 @@ export default function AdminPanel() {
             </div>
             {!sidebarCollapsed && (
               <div className="flex flex-col whitespace-nowrap">
-                <span className="text-sm font-bold leading-tight text-[#093c2b]">UNCP Asistente</span>
-                <span className="text-[11px] text-gray-500">Plataforma Institucional</span>
+                <span className="text-sm font-bold leading-tight text-[#093c2b]">{adminUser?.nombre || 'Administrador'}</span>
+                <span className="text-[11px] text-gray-500 capitalize">{adminUser?.rol || 'Operador'}</span>
               </div>
             )}
           </div>
@@ -755,6 +756,10 @@ export default function AdminPanel() {
             <Link to="/admin/editor" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors bg-[#093c2b] text-white shadow-sm`} title="Flujo de Respuesta">
               <FiGitBranch className="text-emerald-400" size={18} />
               {!sidebarCollapsed && <span>Flujo de Respuesta</span>}
+            </Link>
+            <Link to="/admin" onClick={() => sessionStorage.setItem('dashboardView', 'reports')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-gray-600 hover:bg-gray-50`} title="Historial de Atenciones">
+              <FiClock className="text-gray-400" size={18} />
+              {!sidebarCollapsed && <span>Historial de Atenciones</span>}
             </Link>
           </nav>
         </div>

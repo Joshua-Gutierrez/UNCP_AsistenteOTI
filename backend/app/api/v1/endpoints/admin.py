@@ -65,8 +65,15 @@ async def logout(response: Response):
     return {"ok": True}
 
 @router.get("/me")
-async def verificar_sesion(admin_id: str = Depends(admin_actual)):
-    return {"ok": True, "admin_id": admin_id}
+async def verificar_sesion(admin_id: str = Depends(admin_actual), session: AsyncSession = Depends(get_session)):
+    import uuid
+    admin = await session.get(Admin, uuid.UUID(admin_id))
+    return {
+        "ok": True, 
+        "admin_id": admin_id,
+        "nombre": admin.nombre if admin else "Administrador",
+        "rol": admin.rol if admin else "operador"
+    }
 
 # --- Dashboard: Casos ---
 

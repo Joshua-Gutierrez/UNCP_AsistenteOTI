@@ -12,7 +12,11 @@ export function useAdminDashboard() {
   const navigate = useNavigate();
   const [cases, setCases] = useState({ atendido: [], manual: [], solicitud_soporte: [] });
   const [profiles, setProfiles] = useState([]);
-  const [view, setView] = useState('messages');
+  const [view, setView] = useState(() => {
+    const saved = sessionStorage.getItem('dashboardView');
+    sessionStorage.removeItem('dashboardView');
+    return saved || 'messages';
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

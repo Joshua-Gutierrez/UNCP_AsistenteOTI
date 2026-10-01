@@ -12,7 +12,13 @@ export default function ProtectedAdminRoute({ children }) {
           navigate('/admin/login', { replace: true });
           return false;
         }
-        return response.ok;
+        if (response.ok) {
+          return response.json().then(data => {
+            sessionStorage.setItem('adminUser', JSON.stringify(data));
+            return true;
+          });
+        }
+        return false;
       })
       .then(setAuthorized)
       .catch(() => setAuthorized(false));
