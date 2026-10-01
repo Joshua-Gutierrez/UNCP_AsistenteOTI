@@ -395,6 +395,101 @@ async def crear_plantilla_verificacion_correo(
         ),
     }
 
+@router.post("/nodos/plantilla/validacion-completa", status_code=status.HTTP_201_CREATED)
+async def crear_plantilla_validacion_completa(
+    x: int = 100,
+    y: int = 100,
+    session: AsyncSession = Depends(get_session),
+    admin_id: str = Depends(admin_actual),
+):
+    import secrets as _secrets
+    sufijo = _secrets.token_hex(4)
+
+    nodos_spec = [
+        {
+            "codigo": f"elegir_tipo_documento_{sufijo}",
+            "tipo": "ACCION",
+            "contenido": "¿Qué tipo de documento deseas usar para validarte? Escribe: DNI, Pasaporte, C4 o Carnet_Biblioteca",
+            "bandeja_destino": None,
+            "activo": True,
+            "posicion_x": x,
+            "posicion_y": y,
+        },
+        {
+            "codigo": f"solicitar_foto_documento_{sufijo}",
+            "tipo": "ACCION",
+            "contenido": "Por favor, envía una foto clara de tu documento para extraer el número.",
+            "bandeja_destino": None,
+            "activo": True,
+            "posicion_x": x + 250,
+            "posicion_y": y,
+        },
+        {
+            "codigo": f"extraer_datos_ocr_{sufijo}",
+            "tipo": "ACCION",
+            "contenido": "Extrayendo datos de la imagen...",
+            "bandeja_destino": None,
+            "activo": True,
+            "posicion_x": x + 500,
+            "posicion_y": y,
+        },
+        {
+            "codigo": f"solicitar_datos_manuales_{sufijo}",
+            "tipo": "ACCION",
+            "contenido": (
+                "Para finalizar tu validación, por favor envía en un solo mensaje los siguientes "
+                "5 datos, separados por línea:\n1. Nombre completo\n2. Número de DNI\n3. Código de estudiante\n"
+                "4. Número de WhatsApp\n5. Correo institucional"
+            ),
+            "bandeja_destino": None,
+            "activo": True,
+            "posicion_x": x + 750,
+            "posicion_y": y,
+        },
+        {
+            "codigo": f"validar_coincidencia_total_{sufijo}",
+            "tipo": "ACCION",
+            "contenido": "Validando tus datos con la base de datos...",
+            "bandeja_destino": None,
+            "activo": True,
+            "posicion_x": x + 1000,
+            "posicion_y": y,
+        },
+    ]
+
+    nodos_creados = []
+    for spec in nodos_spec:
+        existente = await crud.get_nodo_por_codigo(session, spec["codigo"])
+        if existente:
+            raise HTTPException(status_code=400, detail=f"El código '{spec['codigo']}' ya existe.")
+        nodo = NodoFlujo(**spec)
+        session.add(nodo)
+        await session.flush()
+        nodos_creados.append(nodo)
+
+    conexiones_internas = [
+        {"nodo_origen_id": nodos_creados[0].id, "nodo_destino_id": nodos_creados[1].id, "etiqueta": "continuar", "valor_entrada": "continuar", "orden": 1},
+        {"nodo_origen_id": nodos_creados[0].id, "nodo_destino_id": nodos_creados[0].id, "etiqueta": "reintentar", "valor_entrada": "reintentar", "orden": 2},
+        {"nodo_origen_id": nodos_creados[1].id, "nodo_destino_id": nodos_creados[2].id, "etiqueta": "continuar", "valor_entrada": "continuar", "orden": 1},
+        {"nodo_origen_id": nodos_creados[1].id, "nodo_destino_id": nodos_creados[1].id, "etiqueta": "reintentar", "valor_entrada": "reintentar", "orden": 2},
+        {"nodo_origen_id": nodos_creados[2].id, "nodo_destino_id": nodos_creados[3].id, "etiqueta": "continuar", "valor_entrada": "continuar", "orden": 1},
+        {"nodo_origen_id": nodos_creados[2].id, "nodo_destino_id": nodos_creados[1].id, "etiqueta": "reintentar", "valor_entrada": "reintentar", "orden": 2}, # reintenta pidiendo foto
+        {"nodo_origen_id": nodos_creados[3].id, "nodo_destino_id": nodos_creados[4].id, "etiqueta": "continuar", "valor_entrada": "continuar", "orden": 1},
+        {"nodo_origen_id": nodos_creados[3].id, "nodo_destino_id": nodos_creados[3].id, "etiqueta": "reintentar", "valor_entrada": "reintentar", "orden": 2},
+    ]
+
+    for conn in conexiones_internas:
+        opcion = OpcionFlujo(**conn)
+        session.add(opcion)
+
+    await session.commit()
+
+    return {
+        "sufijo": sufijo,
+        "nodos": [{"id": str(n.id), "codigo": n.codigo} for n in nodos_creados],
+        "mensaje": "Clúster Validación Completa creado. Conecta la salida 'exito' o 'manual' del último nodo al resto del flujo."
+    }
+
 
 
 # --- Validación del Árbol ---
@@ -486,6 +581,20 @@ async def cambiar_estado_administrador(id: str, activo: bool, db: AsyncSession =
     await db.commit()
     return {"ok": True, "activo": activo}
 
+from pydantic import BaseModel
+class AdminPasswordUpdate(BaseModel):
+    password: str
+
+@router.patch("/administradores/{id}/password")
+async def cambiar_password_administrador(id: str, payload: AdminPasswordUpdate, db: AsyncSession = Depends(get_session), _=Depends(requerir_superadmin)):
+    import uuid
+    admin = await db.get(Admin, uuid.UUID(id))
+    if not admin:
+        raise HTTPException(404, "Administrador no encontrado.")
+    admin.password_hash = hashear_password(payload.password)
+    await db.commit()
+    return {"ok": True}
+
 # --- Finalizar Atención ---
 
 @router.patch("/casos/{caso_id}/finalizar")
@@ -542,7 +651,25 @@ async def reporte_atenciones(
         .order_by(Caso.finalizado_en.desc())
     )
     datos = resultado.all()
-    return [
+    
+    # Calcular métricas
+    from datetime import datetime
+    import math
+    if datos:
+        primer_registro_result = await db.execute(select(func.min(Caso.creado_en)))
+        primer_registro = primer_registro_result.scalar()
+        if primer_registro:
+            dias = (datetime.now(timezone.utc) - primer_registro).days
+            dias = max(dias, 1) # Evitar división por cero
+            total_atenciones_result = await db.execute(select(func.count(Caso.id)).where(Caso.estado == "finalizado"))
+            total_atenciones = total_atenciones_result.scalar()
+            promedio_atenciones_por_dia = round(total_atenciones / dias, 2)
+        else:
+            promedio_atenciones_por_dia = 0
+    else:
+        promedio_atenciones_por_dia = 0
+
+    lista_datos = [
         {
             "admin_nombre": row.admin_nombre,
             "usuario_nombre": row.usuario_nombre or "Anónimo",
@@ -556,6 +683,12 @@ async def reporte_atenciones(
         }
         for row in datos
     ]
+    return {
+        "datos": lista_datos,
+        "metricas": {
+            "promedio_atenciones_por_dia": promedio_atenciones_por_dia
+        }
+    }
 
 @router.get("/reportes/atenciones/exportar")
 async def exportar_reporte_excel(

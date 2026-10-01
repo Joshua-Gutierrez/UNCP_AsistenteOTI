@@ -413,6 +413,17 @@ export default function AdminDashboard() {
               <FiClock className={view === 'reports' ? 'text-emerald-400' : 'text-gray-400'} size={18} />
               {!sidebarCollapsed && <span>Historial de Atenciones</span>}
             </button>
+            
+            {adminUser?.rol === 'superadmin' && (
+              <button 
+                onClick={() => selectView('accounts')}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${view === 'accounts' ? 'bg-[#093c2b] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                title="Gestión de Cuentas"
+              >
+                <FiSettings className={view === 'accounts' ? 'text-emerald-400' : 'text-gray-400'} size={18} />
+                {!sidebarCollapsed && <span>Gestión de Operadores</span>}
+              </button>
+            )}
           </nav>
         </div>
 
@@ -603,7 +614,10 @@ export default function AdminDashboard() {
                       const res = await fetch(`http://localhost:8000/api/v1/admin/reportes/atenciones?fecha_inicio=${start}&fecha_fin=${end}`, {
                         credentials: 'include'
                       });
-                      const data = await res.json();
+                      const body = await res.json();
+                      const data = body.datos || body;
+                      const metricas = body.metricas || {};
+                      
                       const tbody = document.getElementById('report_tbody');
                       if(data.length === 0) {
                         tbody.innerHTML = '<tr><td colSpan="7" className="text-center p-4 text-gray-500">No hay atenciones en este rango</td></tr>';
@@ -620,6 +634,18 @@ export default function AdminDashboard() {
                           </tr>
                         `).join('');
                       }
+                      
+                      let metricasDiv = document.getElementById('report_metricas');
+                      if (!metricasDiv) {
+                        metricasDiv = document.createElement('div');
+                        metricasDiv.id = 'report_metricas';
+                        metricasDiv.className = 'mt-4 flex gap-4';
+                        document.getElementById('report_preview').appendChild(metricasDiv);
+                      }
+                      if (metricas.promedio_atenciones_por_dia !== undefined) {
+                        metricasDiv.innerHTML = `<span class="text-sm font-semibold text-[#093c2b] bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">Promedio atenciones/día: ${metricas.promedio_atenciones_por_dia}</span>`;
+                      }
+                      
                       document.getElementById('report_preview').classList.remove('hidden');
                     } catch (e) {
                       alert('Error al cargar reporte');

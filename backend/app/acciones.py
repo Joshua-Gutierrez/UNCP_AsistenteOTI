@@ -46,8 +46,22 @@ async def invocar_flujo_ocr(sesion: SesionChat, nodo_siguiente: str) -> str:
     return "solicitar_foto_dni"
 
 
+_PATRONES_POR_DOCUMENTO = {
+    "dni": re.compile(r"PER(\d{8})"),
+    "pasaporte": re.compile(r"[A-Z]{2}\d{6,9}"),
+    "c4": re.compile(r"C4[\s-]?(\d{6,9})"),
+    "carnet_biblioteca": re.compile(r"\b\d{6,8}\b"),
+}
+
+def extraer_numero_documento(texto: str, tipo_documento: str) -> str | None:
+    patron = _PATRONES_POR_DOCUMENTO.get(tipo_documento)
+    if not patron:
+        return None
+    coincidencia = patron.search(texto.upper().replace(" ", ""))
+    return coincidencia.group(1) if coincidencia.groups() else (coincidencia.group() if coincidencia else None)
+
 def _extraer_dni_del_texto(texto: str) -> str | None:
-    """Extrae los 8 dígitos del DNI usando primero el patrón MRZ, luego DNIe, y al final genérico."""
+    """Conserva compatibilidad para el flujo original de DNI."""
     texto_norm = texto.upper().replace(" ", "")
     m = _PATRON_DNI_MRZ.search(texto_norm)
     if m:
@@ -234,3 +248,83 @@ async def verificar_codigo_correo(db, sesion: SesionChat, texto_usuario: str) ->
         return "baneado"
 
     return "incorrecto"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Validación Completa Multidocumento
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def elegir_tipo_documento(db, sesion, mensaje_usuario: str | None) -> str:
+    if mensaje_usuario is None:
+        return "continuar"
+    tipo = mensaje_usuario.strip().lower()
+    if tipo not in ("dni", "pasaporte", "c4", "carnet_biblioteca"):
+        return "reintentar"
+    sesion.contexto["tipo_documento"] = tipo
+    flag_modified(sesion, "contexto")
+    return "continuar"
+
+
+async def extraer_datos_ocr(db, sesion, imagen_bytes: bytes | None) -> str:
+    if imagen_bytes is None:
+        return "reintentar"
+    texto = extraer_texto_dni(imagen_bytes)
+    numero = extraer_numero_documento(texto, sesion.contexto.get("tipo_documento", "dni"))
+    if not numero:
+        return "reintentar"
+    sesion.contexto["numero_documento_ocr"] = numero
+    flag_modified(sesion, "contexto")
+    return "continuar"
+
+
+async def solicitar_datos_manuales(db, sesion, mensaje_usuario: str | None) -> str:
+    if mensaje_usuario is None:
+        return "continuar"
+
+    lineas = [l.strip() for l in mensaje_usuario.strip().split("\n") if l.strip()]
+    if len(lineas) != 5:
+        # Aquí el bot podría enviar un mensaje extra diciendo que le faltan datos,
+        # pero según la arquitectura, debe reintentar con el nodo original.
+        return "reintentar"
+
+    sesion.contexto["datos_manuales"] = {
+        "nombre_completo": lineas[0],
+        "dni": lineas[1],
+        "codigo_estudiante": lineas[2],
+        "whatsapp": lineas[3],
+        "correo": lineas[4],
+    }
+    flag_modified(sesion, "contexto")
+    return "continuar"
+
+
+async def validar_coincidencia_total(db, sesion, mensaje_usuario) -> str:
+    datos = sesion.contexto.get("datos_manuales", {})
+    usuario = await crud.get_usuario_por_dni(db, datos.get("dni", ""))
+
+    if usuario is None:
+        return "manual"
+
+    coincide_ocr = datos.get("dni") == sesion.contexto.get("numero_documento_ocr")
+    coincide_codigo = datos.get("codigo_estudiante") == usuario.codigo
+    coincide_whatsapp = datos.get("whatsapp") == usuario.telefono_whatsapp
+    
+    # Manejar correos opcionales
+    correo_bd = (usuario.email or "").lower()
+    correo_req = (datos.get("correo") or "").lower()
+    coincide_correo = (correo_bd == correo_req) and (correo_bd != "")
+
+    if coincide_ocr and coincide_codigo and coincide_whatsapp and coincide_correo:
+        sesion.usuario_id = usuario.id
+        flag_modified(sesion, "contexto")
+        return "exito"
+
+    return "manual"
+
+MANEJADORES_ACCION = {
+    "elegir_tipo_documento": elegir_tipo_documento,
+    "solicitar_foto_documento": extraer_datos_ocr,
+    "extraer_datos_ocr": extraer_datos_ocr,
+    "solicitar_datos_manuales": solicitar_datos_manuales,
+    "validar_coincidencia_total": validar_coincidencia_total,
+}

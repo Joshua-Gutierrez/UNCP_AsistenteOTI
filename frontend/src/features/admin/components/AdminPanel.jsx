@@ -433,6 +433,45 @@ export default function AdminPanel() {
     }
   }, [cargarGrafo, validarArbol, nodes, reactFlowInstance]);
 
+  const agregarClusterValidacionCompleta = useCallback(async () => {
+    let startX = 100;
+    let startY = 100;
+    if (nodes.length > 0) {
+      startX = Math.max(...nodes.map(n => n.position.x)) + 350;
+      startY = nodes[0].position.y;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/nodos/plantilla/validacion-completa?x=${startX}&y=${startY}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'No se pudo crear el cluster Validación');
+      }
+
+      const data = await res.json();
+      await cargarGrafo();
+      await validarArbol();
+      toast.success(
+        <div>
+          <strong>Cluster Validación creado (sufijo: {data.sufijo})</strong>
+          <p className="mt-2 text-xs text-[var(--color-text-muted)]">Arrastra el primer nodo y conéctalo desde tu menú.</p>
+        </div>,
+        { duration: 6000 }
+      );
+      if (reactFlowInstance) {
+        setTimeout(() => reactFlowInstance.setCenter(startX + 150, startY + 50, { zoom: 1, duration: 800 }), 100);
+      }
+    } catch (err) {
+      console.error('Error creando cluster Validación:', err);
+      toast.error(`Error al crear el cluster Validación: ${err.message}`);
+    }
+  }, [cargarGrafo, validarArbol, nodes, reactFlowInstance]);
+
   const onInit = useCallback((instance) => {
     setReactFlowInstance(instance);
     instance.fitView({ padding: 0.15 });
@@ -800,6 +839,14 @@ export default function AdminPanel() {
               >
                 <FiMail className="text-rose-500" size={16} />
                 CREAR NODO GMAIL
+              </button>
+              <button
+                type="button"
+                onClick={agregarClusterValidacionCompleta}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
+              >
+                <FiCheckCircle className="text-blue-500" size={16} />
+                CREAR NODO VALIDACIÓN COMPLETA
               </button>
               <button
                 onClick={cargarGrafo}

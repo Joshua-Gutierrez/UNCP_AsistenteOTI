@@ -18,6 +18,7 @@ class Usuario(SQLModel, table=True):
     
     # Nuevos campos del Excel
     codigo: str | None = Field(default=None, index=True, max_length=20)
+    telefono_whatsapp: str | None = Field(default=None, max_length=20)
     facultad: str | None = Field(default=None, max_length=150)
     escuela: str | None = Field(default=None, max_length=150)
     programa: str | None = Field(default=None, max_length=150)

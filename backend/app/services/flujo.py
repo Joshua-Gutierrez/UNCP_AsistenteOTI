@@ -349,6 +349,28 @@ async def procesar_respuesta(
     if nodo_actual.tipo.upper() == "ACCION_CORREO":
         return await _manejar_accion_correo(db, sesion, nodo_actual, texto_usuario)
 
+    # ── Flujo genérico de ACCION ─────────────────────────────────────────────
+    if nodo_actual.tipo.upper() == "ACCION":
+        from app.acciones import MANEJADORES_ACCION
+        manejador = MANEJADORES_ACCION.get(nodo_actual.codigo)
+        if manejador:
+            resultado = await manejador(db, sesion, texto_usuario)
+            
+            # Si el manejador devuelve "continuar", no avanzamos el nodo (repedimos mensaje) o avanzamos si hay un destino "continuar"?
+            # Wait, usually the result maps to an edge.
+            destino = await _buscar_destino_por_resultado(db, nodo_actual, resultado)
+            if destino and destino.activo:
+                sesion.nodo_actual_id = destino.id
+                _registrar_nodo(sesion, destino)
+                ctx = sesion.contexto or {}
+                mensajes, nodo_final = await _seguir_cadena_automatica(db, sesion, destino, ctx)
+                link_msg = await _crear_caso_si_corresponde(db, sesion, nodo_final)
+                if link_msg:
+                    mensajes.append(link_msg)
+                return mensajes
+            else:
+                return [await construir_mensaje_nodo(db, nodo_actual)]
+
     # ── Flujo normal por opciones numéricas ──────────────────────────────────
     opciones = await obtener_opciones_de_nodo(db, nodo_actual.id)
     if not texto.isdigit():
@@ -396,16 +418,28 @@ async def procesar_imagen(
     imagen_bytes: bytes,
     usuario,
 ) -> list[str]:
-    from app.acciones import validar_imagen_dni
-    resultado = await validar_imagen_dni(sesion, imagen_bytes, usuario, db)
-    
     nodo_actual = await db.get(NodoFlujo, sesion.nodo_actual_id)
+    if not nodo_actual:
+        return ["Error: sesión inválida."]
+
+    if nodo_actual.tipo.upper() == "ACCION":
+        from app.acciones import MANEJADORES_ACCION
+        manejador = MANEJADORES_ACCION.get(nodo_actual.codigo)
+        if manejador:
+            resultado = await manejador(db, sesion, imagen_bytes)
+        else:
+            return ["Error: acción no encontrada."]
+    else:
+        # Fallback to old behavior for backward compatibility if needed
+        from app.acciones import validar_imagen_dni
+        resultado = await validar_imagen_dni(sesion, imagen_bytes, usuario, db)
+    
     destino = await _buscar_destino_por_resultado(db, nodo_actual, resultado)
     
     if not destino:
         raise ValueError("No existe una salida configurada para el resultado: " + resultado)
 
-    if resultado != "exito":
+    if resultado not in ("exito", "continuar"):
         nodo_para_continuar = nodo_actual
     else:
         nodo_para_continuar = destino
@@ -416,7 +450,6 @@ async def procesar_imagen(
     ctx = sesion.contexto or {}
     
     # _seguir_cadena_automatica ya incluye el mensaje del nodo inicial en su lista
-    # No agregar contenido_inicial por separado para evitar duplicados
     mensajes_nuevos, nodo_final = await _seguir_cadena_automatica(db, sesion, destino, ctx)
     
     link_msg = await _crear_caso_si_corresponde(db, sesion, nodo_final)
