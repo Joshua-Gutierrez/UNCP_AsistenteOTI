@@ -466,16 +466,16 @@ export default function AdminDashboard() {
           {view === 'messages' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-1">
               <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
-                <p className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">RESUELTOS POR BOT</p>
+                <p className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">CASOS ATENDIDOS</p>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-3xl font-bold text-[#093c2b]">{cases.atendido?.length || 0}</span>
                   <span className="text-xs font-medium text-gray-500 mb-0.5">casos</span>
                 </div>
                 <div className="mt-2 text-xs font-semibold text-emerald-600 flex items-center gap-1">
-                  <FiActivity/> 88% efectividad IA <span className="font-normal text-gray-400 ml-1">hoy</span>
+                  <FiActivity/> Listos para finalizar
                 </div>
                 <div className="absolute top-4 right-4 w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L3 6v6.5c0 5.05 3.81 9.85 9 11.5 5.19-1.65 9-6.45 9-11.5V6l-9-4zm-1 14H9v-2h2v2zm0-4H9V7h2v5z"/></svg>
+                  <FiCheckCircle size={16} />
                 </div>
                 <div className="absolute bottom-0 left-4 right-4 h-1 bg-emerald-600 rounded-t-md"></div>
               </div>
@@ -487,7 +487,7 @@ export default function AdminDashboard() {
                   <span className="text-xs font-medium text-gray-500 mb-0.5">en curso</span>
                 </div>
                 <div className="mt-2 text-xs font-semibold text-amber-600 flex items-center gap-1">
-                  <FiUsers/> 2 operadores activos
+                  <FiUsers/> Requieren respuesta
                 </div>
                 <div className="absolute top-4 right-4 w-8 h-8 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center">
                    <FiMessageSquare size={16} />
@@ -495,13 +495,13 @@ export default function AdminDashboard() {
               </div>
 
               <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
-                <p className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">MESA DE AYUDA / OCR</p>
+                <p className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">SOPORTE TÉCNICO</p>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-3xl font-bold text-rose-600">{cases.solicitud_soporte?.length || 0}</span>
                   <span className="text-xs font-medium text-gray-500 mb-0.5">pendientes</span>
                 </div>
                 <div className="mt-2 text-xs font-semibold text-rose-600 flex items-center gap-1">
-                  <FiAlertCircle/> 1 caso con OCR trabado
+                  <FiAlertCircle/> Casos complejos
                 </div>
                 <div className="absolute top-4 right-4 w-8 h-8 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center">
                   <FiExternalLink size={16} />
@@ -509,13 +509,13 @@ export default function AdminDashboard() {
               </div>
 
               <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
-                <p className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">TIEMPO MEDIO RESPUESTA</p>
+                <p className="text-[10px] font-bold text-gray-500 tracking-wider mb-1.5">TOTAL ACTIVOS</p>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-bold text-gray-800">1.2</span>
-                  <span className="text-xs font-medium text-gray-500 mb-0.5">min</span>
+                  <span className="text-3xl font-bold text-gray-800">{allCases.length}</span>
+                  <span className="text-xs font-medium text-gray-500 mb-0.5">en bandeja</span>
                 </div>
-                <div className="mt-2 text-xs font-semibold text-emerald-600 flex items-center gap-1">
-                  <FiActivity/> -45s vs promedio 2024
+                <div className="mt-2 text-xs font-semibold text-blue-600 flex items-center gap-1">
+                  <FiActivity/> Volumen actual
                 </div>
                 <div className="absolute top-4 right-4 w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
                   <FiClock size={16} />

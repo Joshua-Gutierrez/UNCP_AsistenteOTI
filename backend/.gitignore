@@ -17,6 +17,7 @@ __pycache__/
 .env.*
 !.env.example
 
-# Logs y bases de datos locales
+# Logs, bases de datos y datos en crudo
 *.log
 *.sqlite3
+*.csv
