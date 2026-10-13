@@ -47,6 +47,7 @@ const NODOS_TIPOS = [
   { value: 'FINAL_ATENDIDO', label: 'Final atendido', description: 'Crea un caso en la bandeja de atendidos.', color: 'var(--color-node-final)', bg: 'var(--color-success-bg)' },
   { value: 'FINAL_MANUAL', label: 'Final necesita atención manual', description: 'Crea un caso en la bandeja de atención manual.', color: 'var(--color-node-final)', bg: 'var(--color-warning-bg)' },
   { value: 'FINAL_SOPORTE', label: 'Final necesita soporte', description: 'Crea un caso en la bandeja de soporte.', color: 'var(--color-node-final)', bg: 'var(--color-danger-bg)' },
+  { value: 'FORMULARIO', label: 'Formulario Secuencial', description: 'Pide datos secuencialmente según el contenido (separado por comas).', color: '#6366f1', bg: '#eef2ff' },
 ];
 
 const BANDEJAS_FINALES = [
@@ -61,6 +62,7 @@ const TIPO_COLORES = {
   condicion: { border: 'var(--color-node-condicion)', bg: 'var(--color-warning-bg)', text: 'var(--color-warning-text)' },
   accion: { border: 'var(--color-node-accion)', bg: 'var(--color-bg-card)', text: 'var(--color-text-primary)' },
   final: { border: 'var(--color-node-final)', bg: 'var(--color-danger-bg)', text: 'var(--color-danger-text)' },
+  formulario: { border: '#6366f1', bg: '#eef2ff', text: '#4f46e5' },
 };
 
 function NodoPersonalizado({ data, selected }) {
@@ -75,48 +77,51 @@ function NodoPersonalizado({ data, selected }) {
       className={`cursor-pointer transition-all duration-200 ${isInactivo ? 'opacity-60' : ''}`}
       style={{
         background: selected ? colores.bg : 'var(--color-bg-card)',
-        border: `2px solid ${selected ? colores.border : colores.border + '80'}`,
-        borderLeft: `4px solid ${colores.border}`,
-        borderRadius: '10px',
-        padding: '14px',
-        width: 280,
-        minHeight: 90,
+        borderWidth: '2px',
+        borderStyle: 'solid',
+        borderColor: selected ? colores.border : colores.border + '80',
+        borderLeftWidth: '4px',
+        borderLeftColor: colores.border,
+        borderRadius: '8px',
+        padding: '10px',
+        width: 220,
+        minHeight: 60,
         boxShadow: selected
-          ? `0 0 0 2px ${colores.border}, 0 8px 24px rgba(0,0,0,0.4)`
-          : '0 4px 16px rgba(0,0,0,0.3)',
+          ? `0 0 0 2px ${colores.border}, 0 6px 16px rgba(0,0,0,0.2)`
+          : '0 2px 8px rgba(0,0,0,0.1)',
       }}
     >
       <Handle
         type="target"
         position={Position.Left}
-        style={{ background: colores.border, width: 14, height: 14, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }}
+        style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }}
       />
       <Handle
         type="source"
         position={Position.Right}
-        style={{ background: colores.border, width: 14, height: 14, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }}
+        style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }}
       />
 
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-bold text-[var(--color-text-primary)] truncate max-w-[200px]" title={data.codigo}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[11px] font-bold text-[var(--color-text-primary)] truncate max-w-[140px]" title={data.codigo}>
           {data.codigo}
         </span>
         <span
-          className="text-[10px] px-2 py-0.5 rounded-full text-white font-medium uppercase tracking-wider"
+          className="text-[9px] px-1.5 py-0.5 rounded text-white font-medium uppercase tracking-wider"
           style={{ background: colores.border }}
         >
-          {data.tipo.toUpperCase()}
+          {data.tipo.substring(0, 8)}
         </span>
       </div>
-      <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">{data.contenido || '(sin contenido)'}</p>
+      <p className="text-[11px] text-[var(--color-text-secondary)] leading-snug line-clamp-2" title={data.contenido}>{data.contenido || '(sin contenido)'}</p>
       {data.valor_entrada && (
-        <p className="text-[10px] mt-2 italic truncate" style={{ color: colores.text }}>
+        <p className="text-[9px] mt-1.5 italic truncate" style={{ color: colores.text }}>
           Si: {data.valor_entrada}
         </p>
       )}
-      {isMenu && <div className="mt-2 flex items-center gap-1 text-[10px] text-[var(--color-text-tertiary)]"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Nodo inicial</div>}
-      {isCondicion && <div className="mt-2 flex items-center gap-1 text-[10px] text-[var(--color-text-tertiary)]"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg> Condición</div>}
-      {isInactivo && <div className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-danger-text)]">Inactivo, puede reactivarse</div>}
+      {isMenu && <div className="mt-1.5 flex items-center gap-1 text-[9px] text-[var(--color-text-tertiary)]"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Nodo inicial</div>}
+      {isCondicion && <div className="mt-1.5 flex items-center gap-1 text-[9px] text-[var(--color-text-tertiary)]"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg> Condición</div>}
+      {isInactivo && <div className="mt-1.5 text-[9px] font-semibold uppercase tracking-wider text-[var(--color-danger-text)]">Inactivo</div>}
     </div>
   );
 }
@@ -153,6 +158,58 @@ function EdgeConEtiqueta({ id, sourceX, sourceY, targetX, targetY, sourcePositio
     </>
   );
 }
+
+function NodoFormulario({ data, selected }) {
+  const isInactivo = data.activo === false;
+  const colores = TIPO_COLORES.formulario;
+  const campos = data.contenido ? data.contenido.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  return (
+    <div
+      className={`cursor-pointer transition-all duration-200 ${isInactivo ? 'opacity-60' : ''}`}
+      style={{
+        background: selected ? colores.bg : 'var(--color-bg-card)',
+        borderWidth: '2px',
+        borderStyle: 'solid',
+        borderColor: selected ? colores.border : colores.border + '80',
+        borderLeftWidth: '4px',
+        borderLeftColor: colores.border,
+        borderRadius: '8px',
+        padding: '10px',
+        width: 240,
+        minHeight: 60,
+        boxShadow: selected
+          ? `0 0 0 2px ${colores.border}, 0 6px 16px rgba(0,0,0,0.2)`
+          : '0 2px 8px rgba(0,0,0,0.1)',
+      }}
+    >
+      <Handle type="target" position={Position.Left} style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }} />
+      <Handle type="source" position={Position.Right} style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }} />
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[11px] font-bold text-[#4f46e5] truncate max-w-[140px]" title={data.codigo}>
+          {data.codigo}
+        </span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded text-white font-medium uppercase tracking-wider bg-[#6366f1]">
+          FORMULARIO
+        </span>
+      </div>
+      <div className="mt-2 space-y-1">
+        {campos.length > 0 ? campos.map((campo, idx) => (
+          <div key={idx} className="flex items-center gap-1.5 text-[10px] text-gray-600 bg-white p-1 rounded border border-gray-100">
+            <div className="w-2 h-2 rounded-full border border-gray-300"></div>
+            <span className="truncate">{campo}</span>
+          </div>
+        )) : (
+          <p className="text-[10px] text-gray-400 italic">Sin campos. (Separa por comas)</p>
+        )}
+      </div>
+      {isInactivo && <div className="mt-1.5 text-[9px] font-semibold uppercase tracking-wider text-[var(--color-danger-text)]">Inactivo</div>}
+    </div>
+  );
+}
+
+const initialNodeTypes = { custom: NodoPersonalizado, formulario: NodoFormulario };
+const initialEdgeTypes = { 'custom-edge': EdgeConEtiqueta };
 
 export default function AdminPanel() {
   const navigate = useNavigate();
@@ -194,7 +251,7 @@ export default function AdminPanel() {
 
       const formattedNodes = nodosActivos.map((nodo) => ({
         id: nodo.id,
-        type: 'custom',
+        type: String(nodo.tipo || '').toLowerCase() === 'formulario' ? 'formulario' : 'custom',
         position: { x: nodo.posicion_x || 0, y: nodo.posicion_y || 0 },
         data: {
           id: nodo.id,
@@ -539,8 +596,8 @@ export default function AdminPanel() {
           }),
         });
         if (!res.ok) {
-           const errData = await res.json().catch(() => ({}));
-           throw new Error(errData.detail || `Error HTTP ${res.status}`);
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Error HTTP ${res.status}`);
         }
       } catch (err) {
         console.error('Error guardando posición:', err);
@@ -824,30 +881,38 @@ export default function AdminPanel() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={agregarClusterDNI}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
-              >
-                <FiBox className="text-emerald-600" size={16} />
-                CREAR NODO DNI
-              </button>
-              <button
-                type="button"
-                onClick={agregarClusterGmail}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
-              >
-                <FiMail className="text-rose-500" size={16} />
-                CREAR NODO GMAIL
-              </button>
-              <button
-                type="button"
-                onClick={agregarClusterValidacionCompleta}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
-              >
-                <FiCheckCircle className="text-blue-500" size={16} />
-                CREAR NODO VALIDACIÓN COMPLETA
-              </button>
+              <div className="group relative">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-white bg-[#093c2b] rounded-lg shadow-sm hover:bg-[#062c1f] transition"
+                >
+                  <FiPlus size={16} />
+                  PLANTILLAS
+                </button>
+                <div className="absolute top-full mt-1 left-0 w-64 bg-white border border-gray-200 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[999] flex flex-col overflow-hidden">
+                  <button type="button" onClick={agregarClusterDNI} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 text-left transition w-full">
+                    <FiBox className="text-emerald-600 shrink-0" size={16} />
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-[13px]">Nodo DNI</span>
+                      <span className="text-[11px] text-gray-400 font-medium">Validación de Documento</span>
+                    </div>
+                  </button>
+                  <button type="button" onClick={agregarClusterGmail} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 text-left transition w-full">
+                    <FiMail className="text-rose-500 shrink-0" size={16} />
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-[13px]">Nodo Gmail</span>
+                      <span className="text-[11px] text-gray-400 font-medium">Verificación de Correo Inst.</span>
+                    </div>
+                  </button>
+                  <button type="button" onClick={agregarClusterValidacionCompleta} className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 text-left transition w-full">
+                    <FiBox className="text-indigo-500 shrink-0" size={16} />
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-[13px]">Validación por Formulario</span>
+                      <span className="text-[11px] text-gray-400 font-medium">Flujo completo con Formulario y OCR</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
               <button
                 onClick={cargarGrafo}
                 disabled={loading}
@@ -920,8 +985,8 @@ export default function AdminPanel() {
                 nodesConnectable={true}
                 elementsSelectable={true}
                 connectionMode="loose"
-                nodeTypes={{ custom: NodoPersonalizado }}
-                edgeTypes={{ 'custom-edge': EdgeConEtiqueta }}
+                nodeTypes={initialNodeTypes}
+                edgeTypes={initialEdgeTypes}
                 defaultViewport={{ x: 0, y: 0, zoom: 1 }}
                 attributionPosition="bottom-left"
               >

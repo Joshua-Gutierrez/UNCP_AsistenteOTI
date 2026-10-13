@@ -54,11 +54,16 @@ _PATRONES_POR_DOCUMENTO = {
 }
 
 def extraer_numero_documento(texto: str, tipo_documento: str) -> str | None:
+    if tipo_documento == "dni":
+        return _extraer_dni_del_texto(texto)
+
     patron = _PATRONES_POR_DOCUMENTO.get(tipo_documento)
     if not patron:
         return None
     coincidencia = patron.search(texto.upper().replace(" ", ""))
-    return coincidencia.group(1) if coincidencia.groups() else (coincidencia.group() if coincidencia else None)
+    if not coincidencia:
+        return None
+    return coincidencia.group(1) if coincidencia.groups() else coincidencia.group()
 
 def _extraer_dni_del_texto(texto: str) -> str | None:
     """Conserva compatibilidad para el flujo original de DNI."""
@@ -258,21 +263,35 @@ async def elegir_tipo_documento(db, sesion, mensaje_usuario: str | None) -> str:
     if mensaje_usuario is None:
         return "continuar"
     tipo = mensaje_usuario.strip().lower()
-    if tipo not in ("dni", "pasaporte", "c4", "carnet_biblioteca"):
+    
+    # Mapeo de opciones numéricas a tipos de documento
+    mapeo = {
+        "1": "dni",
+        "2": "pasaporte",
+        "3": "c4",
+        "4": "carnet_biblioteca"
+    }
+    
+    # Si ingresó el número (botón) o el texto directo
+    tipo_final = mapeo.get(tipo, tipo)
+    
+    if tipo_final not in ("dni", "pasaporte", "c4", "carnet_biblioteca"):
         return "reintentar"
-    sesion.contexto["tipo_documento"] = tipo
+    sesion.contexto["tipo_documento"] = tipo_final
+    from sqlalchemy.orm.attributes import flag_modified
     flag_modified(sesion, "contexto")
     return "continuar"
 
 
-async def extraer_datos_ocr(db, sesion, imagen_bytes: bytes | None) -> str:
-    if imagen_bytes is None:
+async def extraer_datos_ocr(db, sesion, imagen_bytes: bytes | None | str) -> str:
+    if imagen_bytes is None or not isinstance(imagen_bytes, bytes):
         return "reintentar"
     texto = extraer_texto_dni(imagen_bytes)
     numero = extraer_numero_documento(texto, sesion.contexto.get("tipo_documento", "dni"))
     if not numero:
         return "reintentar"
     sesion.contexto["numero_documento_ocr"] = numero
+    sesion.contexto["texto_ocr_completo"] = texto  # Se guarda el texto crudo completo
     flag_modified(sesion, "contexto")
     return "continuar"
 
@@ -298,28 +317,83 @@ async def solicitar_datos_manuales(db, sesion, mensaje_usuario: str | None) -> s
     return "continuar"
 
 
+from app.validacion import nombre_aparece_en_texto_ocr, dni_coincide_exacto, _normalizar_dni
+
 async def validar_coincidencia_total(db, sesion, mensaje_usuario) -> str:
-    datos = sesion.contexto.get("datos_manuales", {})
+    datos_manuales = sesion.contexto.get("datos_manuales", {})
+    form_data = sesion.contexto.get("form_data", {})
+    
+    # Pre-llenamos con datos_manuales por retrocompatibilidad
+    datos = {
+        "nombre_completo": datos_manuales.get("nombre_completo", ""),
+        "dni": datos_manuales.get("dni", ""),
+        "codigo_estudiante": datos_manuales.get("codigo_estudiante", ""),
+        "whatsapp": datos_manuales.get("whatsapp", ""),
+        "correo": datos_manuales.get("correo", "")
+    }
+
+    # Asignación heurística desde form_data
+    for k, v in form_data.items():
+        k_baja = k.lower()
+        if "nombre" in k_baja or "apellidos" in k_baja:
+            # Si el form separa nombre y apellidos, concatenamos
+            if "nombre_completo" not in datos or not datos["nombre_completo"]:
+                datos["nombre_completo"] = v
+            else:
+                datos["nombre_completo"] = f"{datos['nombre_completo']} {v}"
+        elif "dni" in k_baja or "documento" in k_baja:
+            datos["dni"] = v
+        elif "código" in k_baja or "codigo" in k_baja:
+            datos["codigo_estudiante"] = v
+        elif "whatsapp" in k_baja or "teléfono" in k_baja or "telefono" in k_baja or "celular" in k_baja:
+            datos["whatsapp"] = v
+        elif "correo" in k_baja or "email" in k_baja:
+            datos["correo"] = v
+
     usuario = await crud.get_usuario_por_dni(db, datos.get("dni", ""))
 
     if usuario is None:
+        return "manual" # No existe el usuario con ese DNI
+
+    # 1) ANCLA DURA — si el DNI no coincide exacto en los 3 lugares, se corta aquí
+    if not dni_coincide_exacto(
+        datos.get("dni", ""),
+        sesion.contexto.get("numero_documento_ocr", ""),
+        usuario.dni,
+    ):
         return "manual"
 
-    coincide_ocr = datos.get("dni") == sesion.contexto.get("numero_documento_ocr")
-    coincide_codigo = datos.get("codigo_estudiante") == usuario.codigo
-    coincide_whatsapp = datos.get("whatsapp") == usuario.telefono_whatsapp
+    # 2) Nombre — se busca dentro del texto completo que extrajo el OCR,
+    #    verificando contra el nombre ingresado por el usuario O contra el nombre oficial en BD
+    texto_ocr = sesion.contexto.get("texto_ocr_completo", "")
+    nombre_valido = (
+        nombre_aparece_en_texto_ocr(texto_ocr, datos.get("nombre_completo", ""))
+        or (usuario.nombre and nombre_aparece_en_texto_ocr(texto_ocr, usuario.nombre))
+    )
+    if not nombre_valido:
+        return "manual"
+
+    # 3) El resto — exacto, no viene del OCR
+    if datos.get("codigo_estudiante") != usuario.codigo:
+        return "manual"
     
-    # Manejar correos opcionales
-    correo_bd = (usuario.email or "").lower()
-    correo_req = (datos.get("correo") or "").lower()
-    coincide_correo = (correo_bd == correo_req) and (correo_bd != "")
+    # Manejar whatsapp que podría ser nulo en BD
+    whatsapp_ingresado = _normalizar_dni(datos.get("whatsapp", ""))
+    whatsapp_bd = _normalizar_dni(usuario.telefono_whatsapp or "")
+    if whatsapp_bd and whatsapp_ingresado != whatsapp_bd:
+        return "manual"
+        
+    correo_req = (datos.get("correo") or "").strip().lower()
+    correo_bd = (usuario.email or "").strip().lower()
+    if correo_bd and correo_req != correo_bd:
+        return "manual"
 
-    if coincide_ocr and coincide_codigo and coincide_whatsapp and coincide_correo:
-        sesion.usuario_id = usuario.id
-        flag_modified(sesion, "contexto")
-        return "exito"
-
-    return "manual"
+    # La validación de WhatsApp y Correo se hace arriba (ignorando nulos)
+    # y ya no poblamos la base de datos si estaban vacíos.
+    sesion.usuario_id = usuario.id
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(sesion, "contexto")
+    return "exito"
 
 MANEJADORES_ACCION = {
     "elegir_tipo_documento": elegir_tipo_documento,

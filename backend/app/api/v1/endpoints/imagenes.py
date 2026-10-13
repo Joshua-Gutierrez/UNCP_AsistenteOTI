@@ -37,11 +37,11 @@ async def enviar_imagen_dni(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except Exception as error:
-        # Capturar errores internos (ej. PaddleOCR inicializando) y devolverlos
-        # como 503 con headers CORS intactos — sin esto el navegador ve un error de CORS
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=503,
-            detail="El servicio de lectura de imagen no está disponible en este momento. Intenta en unos segundos."
+            detail=f"El servicio de lectura de imagen falló: {str(error)}"
         ) from error
 
     mensajes_asistente = []

@@ -413,17 +413,6 @@ export default function AdminDashboard() {
               <FiClock className={view === 'reports' ? 'text-emerald-400' : 'text-gray-400'} size={18} />
               {!sidebarCollapsed && <span>Historial de Atenciones</span>}
             </button>
-            
-            {adminUser?.rol === 'superadmin' && (
-              <button 
-                onClick={() => selectView('accounts')}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${view === 'accounts' ? 'bg-[#093c2b] text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                title="Gestión de Cuentas"
-              >
-                <FiSettings className={view === 'accounts' ? 'text-emerald-400' : 'text-gray-400'} size={18} />
-                {!sidebarCollapsed && <span>Gestión de Operadores</span>}
-              </button>
-            )}
           </nav>
         </div>
 

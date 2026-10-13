@@ -298,8 +298,8 @@ async def eliminar_opcion(
 
 @router.post("/nodos/plantilla/verificacion-correo", status_code=status.HTTP_201_CREATED)
 async def crear_plantilla_verificacion_correo(
-    x: int = 100,
-    y: int = 100,
+    x: float = 100.0,
+    y: float = 100.0,
     session: AsyncSession = Depends(get_session),
     admin_id: str = Depends(admin_actual),
 ):
@@ -397,53 +397,48 @@ async def crear_plantilla_verificacion_correo(
 
 @router.post("/nodos/plantilla/validacion-completa", status_code=status.HTTP_201_CREATED)
 async def crear_plantilla_validacion_completa(
-    x: int = 100,
-    y: int = 100,
+    x: float = 100.0,
+    y: float = 100.0,
     session: AsyncSession = Depends(get_session),
     admin_id: str = Depends(admin_actual),
 ):
     import secrets as _secrets
     sufijo = _secrets.token_hex(4)
 
+    # ── Nodos del clúster (según boceto) ────────────────────────────────────
+    # Fila superior:  [Suba su DNI] → [Rellene datos] → [Formulario] ─── [Datos no coinciden]
+    #                                                        │    ↑               │
+    #                                                        ↓    └───────────────┘
+    #                                                   [Validación correcta]
+    #                                                        │
+    #                                                        ↓
+    #                                                    (siguiente)
     nodos_spec = [
         {
-            "codigo": f"elegir_tipo_documento_{sufijo}",
+            "codigo": f"solicitar_foto_documento_{sufijo}",
             "tipo": "ACCION",
-            "contenido": "¿Qué tipo de documento deseas usar para validarte? Escribe: DNI, Pasaporte, C4 o Carnet_Biblioteca",
+            "contenido": "Suba su DNI",
             "bandeja_destino": None,
             "activo": True,
             "posicion_x": x,
             "posicion_y": y,
         },
         {
-            "codigo": f"solicitar_foto_documento_{sufijo}",
-            "tipo": "ACCION",
-            "contenido": "Por favor, envía una foto clara de tu documento para extraer el número.",
-            "bandeja_destino": None,
-            "activo": True,
-            "posicion_x": x + 250,
-            "posicion_y": y,
-        },
-        {
             "codigo": f"extraer_datos_ocr_{sufijo}",
-            "tipo": "ACCION",
-            "contenido": "Extrayendo datos de la imagen...",
+            "tipo": "ENVIAR_TEXTO",
+            "contenido": "A continuacion rellene los datos solicitados",
             "bandeja_destino": None,
             "activo": True,
-            "posicion_x": x + 500,
+            "posicion_x": x + 300,
             "posicion_y": y,
         },
         {
-            "codigo": f"solicitar_datos_manuales_{sufijo}",
-            "tipo": "ACCION",
-            "contenido": (
-                "Para finalizar tu validación, por favor envía en un solo mensaje los siguientes "
-                "5 datos, separados por línea:\n1. Nombre completo\n2. Número de DNI\n3. Código de estudiante\n"
-                "4. Número de WhatsApp\n5. Correo institucional"
-            ),
+            "codigo": f"solicitar_datos_formulario_{sufijo}",
+            "tipo": "FORMULARIO",
+            "contenido": "Nombre completo, Número de DNI, Código de estudiante, Número de WhatsApp, Correo institucional",
             "bandeja_destino": None,
             "activo": True,
-            "posicion_x": x + 750,
+            "posicion_x": x + 650,
             "posicion_y": y,
         },
         {
@@ -452,7 +447,25 @@ async def crear_plantilla_validacion_completa(
             "contenido": "Validando tus datos con la base de datos...",
             "bandeja_destino": None,
             "activo": True,
-            "posicion_x": x + 1000,
+            "posicion_x": x + 650,
+            "posicion_y": y + 120,
+        },
+        {
+            "codigo": f"validacion_correcta_{sufijo}",
+            "tipo": "MENSAJE",
+            "contenido": "Validacion correcta, continuando la conversacion",
+            "bandeja_destino": None,
+            "activo": True,
+            "posicion_x": x + 500,
+            "posicion_y": y + 260,
+        },
+        {
+            "codigo": f"datos_no_coinciden_{sufijo}",
+            "tipo": "MENSAJE",
+            "contenido": "Datos no coinciden en su mayoria intente nuevamente",
+            "bandeja_destino": None,
+            "activo": True,
+            "posicion_x": x + 1050,
             "posicion_y": y,
         },
     ]
@@ -467,15 +480,21 @@ async def crear_plantilla_validacion_completa(
         await session.flush()
         nodos_creados.append(nodo)
 
+    # Índices: 0=solicitar_foto, 1=extraer_ocr, 2=formulario,
+    #          3=validar_coincidencia, 4=validacion_correcta, 5=datos_no_coinciden
     conexiones_internas = [
+        # Suba su DNI → A continuación rellene datos (auto-avance tras OCR exitoso)
         {"nodo_origen_id": nodos_creados[0].id, "nodo_destino_id": nodos_creados[1].id, "etiqueta": "continuar", "valor_entrada": "continuar", "orden": 1},
-        {"nodo_origen_id": nodos_creados[0].id, "nodo_destino_id": nodos_creados[0].id, "etiqueta": "reintentar", "valor_entrada": "reintentar", "orden": 2},
-        {"nodo_origen_id": nodos_creados[1].id, "nodo_destino_id": nodos_creados[2].id, "etiqueta": "continuar", "valor_entrada": "continuar", "orden": 1},
-        {"nodo_origen_id": nodos_creados[1].id, "nodo_destino_id": nodos_creados[1].id, "etiqueta": "reintentar", "valor_entrada": "reintentar", "orden": 2},
+        # A continuación rellene datos → Formulario (auto-avance, sin valor_entrada)
+        {"nodo_origen_id": nodos_creados[1].id, "nodo_destino_id": nodos_creados[2].id, "etiqueta": "", "valor_entrada": "", "orden": 1},
+        # Formulario → Validar coincidencia
         {"nodo_origen_id": nodos_creados[2].id, "nodo_destino_id": nodos_creados[3].id, "etiqueta": "continuar", "valor_entrada": "continuar", "orden": 1},
-        {"nodo_origen_id": nodos_creados[2].id, "nodo_destino_id": nodos_creados[1].id, "etiqueta": "reintentar", "valor_entrada": "reintentar", "orden": 2}, # reintenta pidiendo foto
-        {"nodo_origen_id": nodos_creados[3].id, "nodo_destino_id": nodos_creados[4].id, "etiqueta": "continuar", "valor_entrada": "continuar", "orden": 1},
-        {"nodo_origen_id": nodos_creados[3].id, "nodo_destino_id": nodos_creados[3].id, "etiqueta": "reintentar", "valor_entrada": "reintentar", "orden": 2},
+        # Validar coincidencia → Validación correcta
+        {"nodo_origen_id": nodos_creados[3].id, "nodo_destino_id": nodos_creados[4].id, "etiqueta": "exito", "valor_entrada": "exito", "orden": 1},
+        # Validar coincidencia → Datos no coinciden
+        {"nodo_origen_id": nodos_creados[3].id, "nodo_destino_id": nodos_creados[5].id, "etiqueta": "manual", "valor_entrada": "manual", "orden": 2},
+        # Datos no coinciden → Formulario (volver a intentar)
+        {"nodo_origen_id": nodos_creados[5].id, "nodo_destino_id": nodos_creados[2].id, "etiqueta": "volver", "valor_entrada": "", "orden": 1},
     ]
 
     for conn in conexiones_internas:
@@ -659,7 +678,7 @@ async def reporte_atenciones(
         primer_registro_result = await db.execute(select(func.min(Caso.creado_en)))
         primer_registro = primer_registro_result.scalar()
         if primer_registro:
-            dias = (datetime.now(timezone.utc) - primer_registro).days
+            dias = (datetime.now(timezone.utc).replace(tzinfo=None) - primer_registro.replace(tzinfo=None)).days
             dias = max(dias, 1) # Evitar división por cero
             total_atenciones_result = await db.execute(select(func.count(Caso.id)).where(Caso.estado == "finalizado"))
             total_atenciones = total_atenciones_result.scalar()

@@ -1,5 +1,11 @@
 .venv
 .venv/
+.venv-win
+.venv-win/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
 .env
+*.log

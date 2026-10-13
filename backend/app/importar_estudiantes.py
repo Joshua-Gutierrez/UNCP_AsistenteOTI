@@ -49,12 +49,16 @@ async def importar_desde_csv(ruta_csv: str):
                     provincia = str(row.get("Provincia", "")).strip()
                     distrito = str(row.get("Distrito", "")).strip()
 
+                    email_generado = f"e_{codigo.lower()}@uncp.edu.pe" if codigo else None
+
                     # Verificar si el estudiante ya existe
                     existente = (await db.exec(select(Usuario).where(Usuario.dni == dni))).first()
 
                     if existente:
                         # Si ya existe, le actualizamos los datos extra
                         existente.codigo = codigo
+                        if email_generado and not existente.email:
+                            existente.email = email_generado
                         existente.facultad = facultad
                         existente.escuela = escuela
                         existente.programa = programa
@@ -73,6 +77,7 @@ async def importar_desde_csv(ruta_csv: str):
                         nuevo_usuario = Usuario(
                             dni=dni,
                             nombre=nombre,
+                            email=email_generado,
                             rol="estudiante",
                             codigo=codigo,
                             facultad=facultad,

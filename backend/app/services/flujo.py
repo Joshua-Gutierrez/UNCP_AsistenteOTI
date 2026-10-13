@@ -134,6 +134,9 @@ async def construir_mensaje_nodo(
 ) -> str:
     opciones = await obtener_opciones_de_nodo(db, nodo.id)
     if not nodo.es_nodo_raiz and nodo.tipo not in {"menu", "condicion"}:
+        if nodo.tipo.upper() == "FORMULARIO":
+            campos = [c.strip() for c in (nodo.contenido or "").split(",") if c.strip()]
+            return f"Por favor, indica: {campos[0]}" if campos else "Formulario sin campos."
         return nodo.contenido
 
     lineas = [_quitar_opciones_embebidas(nodo.contenido), ""]
@@ -319,6 +322,43 @@ async def _seguir_cadena_automatica(
     return mensajes, nodo
 
 
+async def _avanzar_siguiente(db: AsyncSession, sesion: SesionChat, nodo_actual: NodoFlujo) -> list[str]:
+    opciones = await obtener_opciones_de_nodo(db, nodo_actual.id)
+    destino = next((dest for _, dest, _ in opciones if dest.activo), None)
+    if not destino:
+        return ["Formulario completado."]
+    
+    sesion.nodo_actual_id = destino.id
+    _registrar_nodo(sesion, destino)
+
+    # Si el siguiente nodo es una ACCION, ejecutarla automáticamente
+    # (ej: validar_coincidencia_total tras completar el formulario)
+    if destino.tipo.upper() == "ACCION":
+        from app.acciones import MANEJADORES_ACCION
+        manejador = next((v for k, v in MANEJADORES_ACCION.items() if destino.codigo.startswith(k)), None)
+        if manejador:
+            msg_previo = await construir_mensaje_nodo(db, destino)
+            resultado = await manejador(db, sesion, None)
+            destino_resultado = await _buscar_destino_por_resultado(db, destino, resultado)
+            if destino_resultado and destino_resultado.activo:
+                sesion.nodo_actual_id = destino_resultado.id
+                _registrar_nodo(sesion, destino_resultado)
+                ctx = sesion.contexto or {}
+                mensajes, nodo_final = await _seguir_cadena_automatica(db, sesion, destino_resultado, ctx)
+                link_msg = await _crear_caso_si_corresponde(db, sesion, nodo_final)
+                if link_msg:
+                    mensajes.append(link_msg)
+                return [msg_previo] + mensajes
+            else:
+                return [msg_previo, await construir_mensaje_nodo(db, destino)]
+
+    ctx = sesion.contexto or {}
+    mensajes, nodo_final = await _seguir_cadena_automatica(db, sesion, destino, ctx)
+    link_msg = await _crear_caso_si_corresponde(db, sesion, nodo_final)
+    if link_msg:
+        mensajes.append(link_msg)
+    return mensajes
+
 async def procesar_respuesta(
     db: AsyncSession,
     sesion: SesionChat,
@@ -349,10 +389,46 @@ async def procesar_respuesta(
     if nodo_actual.tipo.upper() == "ACCION_CORREO":
         return await _manejar_accion_correo(db, sesion, nodo_actual, texto_usuario)
 
+    # ── Flujo de Formularios Secuenciales ─────────────────────────────────────
+    if nodo_actual.tipo.upper() == "FORMULARIO":
+        campos = [c.strip() for c in (nodo_actual.contenido or "").split(",") if c.strip()]
+        if not campos:
+            # Si no hay campos, avanza automáticamente
+            return await _avanzar_siguiente(db, sesion, nodo_actual)
+
+        from sqlalchemy.orm.attributes import flag_modified
+        if sesion.contexto.get("form_estado") != str(nodo_actual.id):
+            # Recién ingresa al formulario, el usuario está respondiendo al primer campo (idx 0)
+            idx = 0
+            sesion.contexto["form_estado"] = str(nodo_actual.id)
+            sesion.contexto["form_data"] = {}
+        else:
+            # Ya estábamos en el formulario
+            idx = sesion.contexto.get("form_idx", 0)
+
+        campo_actual = campos[idx]
+        
+        if "form_data" not in sesion.contexto:
+            sesion.contexto["form_data"] = {}
+        sesion.contexto["form_data"][campo_actual] = texto_usuario.strip()
+
+        idx += 1
+        if idx < len(campos):
+            # Pedir el siguiente
+            sesion.contexto["form_idx"] = idx
+            flag_modified(sesion, "contexto")
+            return [f"Por favor, indica: {campos[idx]}"]
+        else:
+                # Terminado
+                sesion.contexto.pop("form_estado", None)
+                sesion.contexto.pop("form_idx", None)
+                flag_modified(sesion, "contexto")
+                return await _avanzar_siguiente(db, sesion, nodo_actual)
+
     # ── Flujo genérico de ACCION ─────────────────────────────────────────────
     if nodo_actual.tipo.upper() == "ACCION":
         from app.acciones import MANEJADORES_ACCION
-        manejador = MANEJADORES_ACCION.get(nodo_actual.codigo)
+        manejador = next((v for k, v in MANEJADORES_ACCION.items() if nodo_actual.codigo.startswith(k)), None)
         if manejador:
             resultado = await manejador(db, sesion, texto_usuario)
             
@@ -424,7 +500,7 @@ async def procesar_imagen(
 
     if nodo_actual.tipo.upper() == "ACCION":
         from app.acciones import MANEJADORES_ACCION
-        manejador = MANEJADORES_ACCION.get(nodo_actual.codigo)
+        manejador = next((v for k, v in MANEJADORES_ACCION.items() if nodo_actual.codigo.startswith(k)), None)
         if manejador:
             resultado = await manejador(db, sesion, imagen_bytes)
         else:
@@ -437,6 +513,8 @@ async def procesar_imagen(
     destino = await _buscar_destino_por_resultado(db, nodo_actual, resultado)
     
     if not destino:
+        if resultado in ("reintentar", "error"):
+            return ["No se pudo identificar un documento válido en la imagen. Por favor, sube una foto nítida y legible de tu documento."]
         raise ValueError("No existe una salida configurada para el resultado: " + resultado)
 
     if resultado not in ("exito", "continuar"):
