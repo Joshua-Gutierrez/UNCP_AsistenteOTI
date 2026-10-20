@@ -1,3 +1,5 @@
+import re
+from sqlalchemy import func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models.admin import Admin
@@ -13,7 +15,21 @@ async def get_usuario_por_email_activo(db: AsyncSession, email: str) -> Usuario 
     return resultado.first()
 
 async def get_usuario_por_dni(db: AsyncSession, dni: str) -> Usuario | None:
-    resultado = await db.exec(select(Usuario).where(Usuario.dni == dni))
+    if not dni:
+        return None
+    dni_limpio = re.sub(r"\D", "", dni)
+    resultado = await db.exec(
+        select(Usuario).where((Usuario.dni == (dni_limpio or dni.strip())) | (Usuario.dni == dni.strip()))
+    )
+    return resultado.first()
+
+async def get_usuario_por_codigo(db: AsyncSession, codigo: str) -> Usuario | None:
+    if not codigo:
+        return None
+    codigo_limpio = codigo.strip().upper()
+    resultado = await db.exec(
+        select(Usuario).where(func.upper(Usuario.codigo) == codigo_limpio)
+    )
     return resultado.first()
 
 async def get_usuario_por_dni_o_email(db: AsyncSession, dni: str, email: str) -> Usuario | None:

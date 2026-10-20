@@ -394,24 +394,82 @@ a:hover {
   fill: var(--color-brand-primary);
 }
 
-.flow-edge-label {
+.flow-edge-label-wrapper {
   position: absolute;
-  z-index: 10;
-  padding: 3px 6px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  background: var(--color-bg-elevated);
-  font-size: 10px;
-  font-weight: var(--font-weight-bold);
-  line-height: 1.1;
-  white-space: nowrap;
   pointer-events: all;
+  z-index: 10;
+}
+
+.flow-edge-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: rgba(24, 26, 32, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-primary);
+  font-size: 10.5px;
+  font-weight: var(--font-weight-semibold, 600);
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease, background 0.18s ease;
+  transform-origin: center center;
+}
+
+.flow-edge-label:hover {
+  transform: scale(1.08);
+  background: rgba(30, 33, 42, 0.96);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+.flow-edge-label.is-selected {
+  transform: scale(1.05);
+  background: rgba(24, 26, 32, 0.98);
+}
+
+.flow-edge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+  box-shadow: 0 0 5px currentColor;
+}
+
+.react-flow__edge {
+  cursor: pointer;
 }
 
 .react-flow__edge-path {
-  stroke: var(--color-border-strong);
-  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke 0.2s ease, stroke-width 0.2s ease, filter 0.2s ease;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3.5px !important;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3.5px !important;
+  stroke-dasharray: 6 3;
+  animation: flow-edge-dash 0.8s linear infinite;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+@keyframes flow-edge-dash {
+  from {
+    stroke-dashoffset: 18;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 @media (max-width: 850px) {

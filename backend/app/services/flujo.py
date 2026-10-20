@@ -348,9 +348,10 @@ async def _avanzar_siguiente(db: AsyncSession, sesion: SesionChat, nodo_actual: 
                 link_msg = await _crear_caso_si_corresponde(db, sesion, nodo_final)
                 if link_msg:
                     mensajes.append(link_msg)
-                return [msg_previo] + mensajes
+                return [_interpolar_contexto(msg_previo, ctx)] + mensajes
             else:
-                return [msg_previo, await construir_mensaje_nodo(db, destino)]
+                ctx = sesion.contexto or {}
+                return [_interpolar_contexto(msg_previo, ctx), _interpolar_contexto(await construir_mensaje_nodo(db, destino), ctx)]
 
     ctx = sesion.contexto or {}
     mensajes, nodo_final = await _seguir_cadena_automatica(db, sesion, destino, ctx)
@@ -498,15 +499,14 @@ async def procesar_imagen(
     if not nodo_actual:
         return ["Error: sesión inválida."]
 
+    resultado = None
     if nodo_actual.tipo.upper() == "ACCION":
         from app.acciones import MANEJADORES_ACCION
         manejador = next((v for k, v in MANEJADORES_ACCION.items() if nodo_actual.codigo.startswith(k)), None)
         if manejador:
             resultado = await manejador(db, sesion, imagen_bytes)
-        else:
-            return ["Error: acción no encontrada."]
-    else:
-        # Fallback to old behavior for backward compatibility if needed
+
+    if resultado is None:
         from app.acciones import validar_imagen_dni
         resultado = await validar_imagen_dni(sesion, imagen_bytes, usuario, db)
     

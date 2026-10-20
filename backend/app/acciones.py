@@ -317,83 +317,142 @@ async def solicitar_datos_manuales(db, sesion, mensaje_usuario: str | None) -> s
     return "continuar"
 
 
-from app.validacion import nombre_aparece_en_texto_ocr, dni_coincide_exacto, _normalizar_dni
+from app.validacion import (
+    nombre_aparece_en_texto_ocr,
+    dni_coincide_exacto,
+    _normalizar_dni,
+    _normalizar_texto,
+)
+from rapidfuzz import fuzz
 
 async def validar_coincidencia_total(db, sesion, mensaje_usuario) -> str:
     datos_manuales = sesion.contexto.get("datos_manuales", {})
     form_data = sesion.contexto.get("form_data", {})
-    
+
     # Pre-llenamos con datos_manuales por retrocompatibilidad
     datos = {
         "nombre_completo": datos_manuales.get("nombre_completo", ""),
         "dni": datos_manuales.get("dni", ""),
         "codigo_estudiante": datos_manuales.get("codigo_estudiante", ""),
         "whatsapp": datos_manuales.get("whatsapp", ""),
-        "correo": datos_manuales.get("correo", "")
+        "correo": datos_manuales.get("correo", ""),
     }
 
-    # Asignación heurística desde form_data
+    # Asignación flexible desde form_data
     for k, v in form_data.items():
-        k_baja = k.lower()
-        if "nombre" in k_baja or "apellidos" in k_baja:
-            # Si el form separa nombre y apellidos, concatenamos
-            if "nombre_completo" not in datos or not datos["nombre_completo"]:
-                datos["nombre_completo"] = v
+        k_baja = _normalizar_texto(k).lower()
+        val = str(v).strip()
+        if not val:
+            continue
+        if "nombre" in k_baja or "apellido" in k_baja:
+            if not datos.get("nombre_completo"):
+                datos["nombre_completo"] = val
             else:
-                datos["nombre_completo"] = f"{datos['nombre_completo']} {v}"
-        elif "dni" in k_baja or "documento" in k_baja:
-            datos["dni"] = v
-        elif "código" in k_baja or "codigo" in k_baja:
-            datos["codigo_estudiante"] = v
-        elif "whatsapp" in k_baja or "teléfono" in k_baja or "telefono" in k_baja or "celular" in k_baja:
-            datos["whatsapp"] = v
-        elif "correo" in k_baja or "email" in k_baja:
-            datos["correo"] = v
+                datos["nombre_completo"] = f"{datos['nombre_completo']} {val}"
+        elif "dni" in k_baja or "documento" in k_baja or "cedula" in k_baja:
+            datos["dni"] = val
+        elif "codigo" in k_baja or "matricula" in k_baja:
+            datos["codigo_estudiante"] = val
+        elif "whatsapp" in k_baja or "telefono" in k_baja or "celular" in k_baja or "movil" in k_baja:
+            datos["whatsapp"] = val
+        elif "correo" in k_baja or "email" in k_baja or "mail" in k_baja:
+            datos["correo"] = val
 
-    usuario = await crud.get_usuario_por_dni(db, datos.get("dni", ""))
+    dni_form = _normalizar_dni(datos.get("dni", ""))
+    cod_form = (datos.get("codigo_estudiante", "") or "").strip().upper().replace(" ", "").replace("-", "")
+    nombre_form = (datos.get("nombre_completo", "") or "").strip()
+    correo_form = (datos.get("correo", "") or "").strip().lower()
+    whatsapp_form = _normalizar_dni(datos.get("whatsapp", ""))
+
+    # 1. Búsqueda del usuario en la base de datos (por DNI, Código o Correo)
+    usuario = None
+    if dni_form:
+        usuario = await crud.get_usuario_por_dni(db, dni_form)
+    if not usuario and cod_form:
+        usuario = await crud.get_usuario_por_codigo(db, cod_form)
+    if not usuario and correo_form:
+        usuario = await crud.get_usuario_por_email_activo(db, correo_form)
 
     if usuario is None:
-        return "manual" # No existe el usuario con ese DNI
-
-    # 1) ANCLA DURA — si el DNI no coincide exacto en los 3 lugares, se corta aquí
-    if not dni_coincide_exacto(
-        datos.get("dni", ""),
-        sesion.contexto.get("numero_documento_ocr", ""),
-        usuario.dni,
-    ):
+        # No se encontró ningún estudiante con esos datos en la BD institucional
         return "manual"
 
-    # 2) Nombre — se busca dentro del texto completo que extrajo el OCR,
-    #    verificando contra el nombre ingresado por el usuario O contra el nombre oficial en BD
-    texto_ocr = sesion.contexto.get("texto_ocr_completo", "")
-    nombre_valido = (
-        nombre_aparece_en_texto_ocr(texto_ocr, datos.get("nombre_completo", ""))
-        or (usuario.nombre and nombre_aparece_en_texto_ocr(texto_ocr, usuario.nombre))
-    )
-    if not nombre_valido:
-        return "manual"
-
-    # 3) El resto — exacto, no viene del OCR
-    if datos.get("codigo_estudiante") != usuario.codigo:
-        return "manual"
-    
-    # Manejar whatsapp que podría ser nulo en BD
-    whatsapp_ingresado = _normalizar_dni(datos.get("whatsapp", ""))
-    whatsapp_bd = _normalizar_dni(usuario.telefono_whatsapp or "")
-    if whatsapp_bd and whatsapp_ingresado != whatsapp_bd:
-        return "manual"
-        
-    correo_req = (datos.get("correo") or "").strip().lower()
+    # Datos oficiales en base de datos
+    dni_bd = _normalizar_dni(usuario.dni or "")
+    cod_bd = (usuario.codigo or "").strip().upper().replace(" ", "").replace("-", "")
+    nombre_bd = usuario.nombre or ""
     correo_bd = (usuario.email or "").strip().lower()
-    if correo_bd and correo_req != correo_bd:
+
+    # 2. Comprobación de coincidencia de DNI
+    dni_coincide_form_bd = bool(dni_form and dni_bd and dni_form == dni_bd)
+    dni_ocr = _normalizar_dni(sesion.contexto.get("numero_documento_ocr", ""))
+    dni_coincide_ocr = bool(
+        dni_ocr and (
+            dni_ocr == dni_bd
+            or (len(dni_ocr) == len(dni_bd) and fuzz.ratio(dni_ocr, dni_bd) >= 85)
+        )
+    )
+
+    # 3. Comprobación de Código de Estudiante
+    codigo_coincide = bool(
+        cod_form and cod_bd and (
+            cod_form == cod_bd
+            or (len(cod_form) >= 6 and (cod_form in cod_bd or cod_bd in cod_form))
+        )
+    )
+
+    # 4. Comprobación de Nombre (contra BD y contra OCR si existe)
+    texto_ocr = sesion.contexto.get("texto_ocr_completo", "")
+    nombre_coincide_bd = bool(
+        nombre_form and nombre_bd and (
+            fuzz.token_set_ratio(_normalizar_texto(nombre_form), _normalizar_texto(nombre_bd)) >= 65
+        )
+    )
+    nombre_coincide_ocr = bool(
+        texto_ocr and (
+            nombre_aparece_en_texto_ocr(texto_ocr, nombre_form)
+            or (nombre_bd and nombre_aparece_en_texto_ocr(texto_ocr, nombre_bd))
+        )
+    )
+    nombre_valido = nombre_coincide_bd or nombre_coincide_ocr
+
+    # 5. Evaluación de decisión final:
+    # Aprobamos si:
+    #  a) DNI coincide con BD Y (Código coincide O Nombre coincide con BD/OCR)
+    #  b) Código coincide con BD Y Nombre coincide con BD/OCR
+    #  c) DNI en OCR coincide con BD Y (DNI coincide O Código coincide O Nombre coincide)
+    #  d) DNI coincide con BD y no había código registrado en BD
+    es_valido = False
+    if dni_coincide_form_bd and (codigo_coincide or nombre_valido):
+        es_valido = True
+    elif codigo_coincide and nombre_valido:
+        es_valido = True
+    elif dni_coincide_ocr and (dni_coincide_form_bd or codigo_coincide or nombre_valido):
+        es_valido = True
+    elif dni_coincide_form_bd and not cod_bd:
+        es_valido = nombre_valido
+
+    if not es_valido:
         return "manual"
 
-    # La validación de WhatsApp y Correo se hace arriba (ignorando nulos)
-    # y ya no poblamos la base de datos si estaban vacíos.
+    # Actualizar datos de sesión y usuario con la información verificada
     sesion.usuario_id = usuario.id
+    sesion.contexto["nombre_usuario"] = usuario.nombre
+    sesion.contexto["correo_usuario"] = correo_form or usuario.email or ""
+    sesion.contexto["codigo_estudiante"] = usuario.codigo or cod_form
+    sesion.contexto["dni_usuario"] = usuario.dni or dni_form
+    if whatsapp_form and not usuario.telefono_whatsapp:
+        usuario.telefono_whatsapp = whatsapp_form
+        db.add(usuario)
+
     from sqlalchemy.orm.attributes import flag_modified
     flag_modified(sesion, "contexto")
     return "exito"
+
+async def accion_validar_dni(db, sesion: SesionChat, imagen_bytes: bytes) -> str:
+    usuario = await db.get(Usuario, sesion.usuario_id)
+    return await validar_imagen_dni(sesion, imagen_bytes, usuario, db)
+
 
 MANEJADORES_ACCION = {
     "elegir_tipo_documento": elegir_tipo_documento,
@@ -401,4 +460,9 @@ MANEJADORES_ACCION = {
     "extraer_datos_ocr": extraer_datos_ocr,
     "solicitar_datos_manuales": solicitar_datos_manuales,
     "validar_coincidencia_total": validar_coincidencia_total,
+    "dni_solicitud": accion_validar_dni,
+    "solicitar_foto_dni": accion_validar_dni,
+    "verificar_ocr_dni": accion_validar_dni,
+    "validar_dni": accion_validar_dni,
 }
+

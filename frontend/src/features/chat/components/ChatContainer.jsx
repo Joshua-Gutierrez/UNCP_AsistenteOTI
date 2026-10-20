@@ -13,6 +13,7 @@ export default function ChatContainer() {
     cargando,
     subiendoImagen,
     error,
+    esperandoDni,
     messagesEndRef,
     scrollAreaRef,
     inputRef,
@@ -148,7 +149,10 @@ export default function ChatContainer() {
             setInput={setTextoInput} 
             onSubmit={manejarEnvio} 
             onFileSelect={manejarImagen} 
-            isCargando={cargando} 
+            isCargando={cargando}
+            esperandoDni={esperandoDni}
+            onReset={resetChat}
+            inputRef={inputRef}
           />
         </div>
       </div>

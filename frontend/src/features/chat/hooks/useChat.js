@@ -2,17 +2,42 @@ import { useState, useEffect, useRef } from 'react';
 import { getSessionId, fetchHistorial, sendDniImage, sendMessage } from '../chatApi';
 
 const esSolicitudDni = (contenido = '') => {
-  const texto = contenido.toLowerCase();
-  return texto.includes('dni') && (texto.includes('foto') || texto.includes('imagen') || texto.includes('suba') || texto.includes('adjunte'));
+  if (!contenido) return false;
+  const texto = contenido.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const tieneDni = texto.includes('dni') || texto.includes('documento') || texto.includes('cui') || texto.includes('identidad');
+  const pideFoto =
+    texto.includes('foto') ||
+    texto.includes('imagen') ||
+    texto.includes('suba') ||
+    texto.includes('sube') ||
+    texto.includes('subir') ||
+    texto.includes('adjunt') ||
+    texto.includes('toma') ||
+    texto.includes('tomar') ||
+    texto.includes('captura') ||
+    texto.includes('envia') ||
+    texto.includes('enviar');
+  return tieneDni && pideFoto;
 };
 
 const esErrorValidacionDni = (contenido = '') => {
-  const texto = contenido.toLowerCase();
+  if (!contenido) return false;
+  const texto = contenido.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   return (
     (texto.includes('validaci') && texto.includes('incorrecta')) ||
-    texto.includes('intente de nuevo') ||
-    texto.includes('no se pudo validar')
+    (texto.includes('intente') && texto.includes('nuevo')) ||
+    (texto.includes('reintentar') && (texto.includes('dni') || texto.includes('foto'))) ||
+    (texto.includes('no pudimos leer') && texto.includes('dni')) ||
+    (texto.includes('no se pudo') && (texto.includes('validar') || texto.includes('leer') || texto.includes('identificar'))) ||
+    (texto.includes('datos') && texto.includes('no coinciden'))
   );
+};
+
+const determinarEsperandoDni = (listaMensajes = []) => {
+  if (!listaMensajes || listaMensajes.length === 0) return false;
+  const ultimoMensaje = listaMensajes[listaMensajes.length - 1];
+  if (ultimoMensaje?.remitente !== 'asistente') return false;
+  return esSolicitudDni(ultimoMensaje.contenido) || esErrorValidacionDni(ultimoMensaje.contenido);
 };
 
 const ERRORES_AMIGABLES = {
@@ -60,10 +85,10 @@ export function useChat() {
   }, [mensajes]);
 
   useEffect(() => {
-    if (!cargando) {
+    if (!cargando && !esperandoDni) {
       inputRef.current?.focus();
     }
-  }, [cargando]);
+  }, [cargando, esperandoDni]);
 
   useEffect(() => {
     let activo = true;
@@ -76,8 +101,7 @@ export function useChat() {
         const historial = await fetchHistorial(id);
         if (activo) {
           setMensajes(historial);
-          const ultimoMensaje = historial[historial.length - 1];
-          setEsperandoDni(ultimoMensaje?.remitente === 'asistente' && esSolicitudDni(ultimoMensaje.contenido));
+          setEsperandoDni(determinarEsperandoDni(historial));
           setTimeout(() => scrollToBottom(false), 50);
         }
       } catch (error) {
@@ -107,8 +131,7 @@ export function useChat() {
       const respuestasBot = await sendMessage(sesionId, nuevoMensajeUsuario.contenido);
       const respuestas = Array.isArray(respuestasBot) ? respuestasBot : [respuestasBot];
       setMensajes((prev) => [...prev, ...respuestas.map(r => ({ ...r, timestamp: new Date() }))]);
-      const ultimaRespuesta = respuestas[respuestas.length - 1];
-      setEsperandoDni(esSolicitudDni(ultimaRespuesta?.contenido));
+      setEsperandoDni(determinarEsperandoDni(respuestas));
       // Forzar scroll tras respuesta
       requestAnimationFrame(() => scrollToBottom(true));
     } catch (error) {
@@ -143,8 +166,7 @@ export function useChat() {
         { remitente: 'usuario', contenido: '📷 Foto del DNI enviada', isImage: true, timestamp: new Date() },
         ...respuestas.map(r => ({ ...r, timestamp: new Date() })),
       ]);
-      const ultimaRespuesta = respuestas[respuestas.length - 1];
-      setEsperandoDni(esSolicitudDni(ultimaRespuesta?.contenido) || esErrorValidacionDni(ultimaRespuesta?.contenido));
+      setEsperandoDni(determinarEsperandoDni(respuestas));
     } catch (error) {
       setMensajes((prev) => prev.slice(0, -1));
       setError(mensajeAmigable(error?.message));
@@ -167,6 +189,7 @@ export function useChat() {
       await sendMessage(sesionId, '0');
       const historial = await fetchHistorial(sesionId);
       setMensajes(historial);
+      setEsperandoDni(determinarEsperandoDni(historial));
       scrollToBottom();
     } catch (e) {
       console.error(e);

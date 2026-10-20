@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   FiChevronLeft, FiChevronRight, FiGitBranch, FiLogOut,
@@ -17,8 +17,10 @@ import {
   Position,
   BaseEdge,
   EdgeLabelRenderer,
-  getSmoothStepPath,
+  getBezierPath,
   MarkerType,
+  ConnectionLineType,
+  ConnectionMode,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import toast from 'react-hot-toast';
@@ -92,13 +94,27 @@ function NodoPersonalizado({ data, selected }) {
       }}
     >
       <Handle
-        type="target"
+        type="source"
         position={Position.Left}
+        id="left"
         style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }}
       />
       <Handle
         type="source"
         position={Position.Right}
+        id="right"
+        style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }}
+      />
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="top"
+        style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="bottom"
         style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }}
       />
 
@@ -126,32 +142,173 @@ function NodoPersonalizado({ data, selected }) {
   );
 }
 
-function EdgeConEtiqueta({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, style }) {
+function getEdgeSemanticTheme(etiqueta = '', valorEntrada = '') {
+  const text = `${etiqueta || ''} ${valorEntrada || ''}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // Errores / Fallos / Validaciones incorrectas
+  if (text.includes('error') || text.includes('fallo') || text.includes('incorrect') || text.includes('cancel')) {
+    return {
+      stroke: '#ef4444',
+      dot: '#ef4444',
+      bg: 'rgba(239, 68, 68, 0.12)',
+      border: 'rgba(239, 68, 68, 0.4)',
+      text: '#fca5a5',
+    };
+  }
+
+  // Reintentos / Volver / Atención manual / Soporte
+  if (text.includes('manual') || text.includes('volver') || text.includes('soporte') || text.includes('atencion')) {
+    return {
+      stroke: '#f59e0b',
+      dot: '#f59e0b',
+      bg: 'rgba(245, 158, 11, 0.12)',
+      border: 'rgba(245, 158, 11, 0.4)',
+      text: '#fcd34d',
+    };
+  }
+
+  // Éxito / Confirmación / Flujo positivo
+  if (text.includes('exito') || text.includes('continuar') || text.includes('correct') || text.includes('valido') || text.includes('aprobado')) {
+    return {
+      stroke: '#10b981',
+      dot: '#10b981',
+      bg: 'rgba(16, 185, 129, 0.12)',
+      border: 'rgba(16, 185, 129, 0.4)',
+      text: '#6ee7b7',
+    };
+  }
+
+  // Opciones de menú o consultas por defecto
+  return {
+    stroke: '#10b981',
+    dot: '#34d399',
+    bg: 'rgba(24, 26, 32, 0.88)',
+    border: 'rgba(52, 211, 153, 0.35)',
+    text: '#e2e8f0',
+  };
+}
+
+function resolverHandlesOptimos(nodoOrigen, nodoDestino, etiqueta = '') {
+  if (!nodoOrigen || !nodoDestino) {
+    return { sourceHandle: 'right', targetHandle: 'left' };
+  }
+
+  const ox = Number(nodoOrigen.posicion_x || 0);
+  const oy = Number(nodoOrigen.posicion_y || 0);
+  const dx = Number(nodoDestino.posicion_x || 0);
+  const dy = Number(nodoDestino.posicion_y || 0);
+
+  const deltaX = dx - ox;
+  const deltaY = dy - oy;
+
+  // 1. Retroceso: el nodo destino está ubicado hacia la izquierda (deltaX < -30)
+  if (deltaX < -30) {
+    if (deltaY > 60) {
+      // Destino abajo a la izquierda: salir por la izquierda y entrar por arriba
+      return { sourceHandle: 'left', targetHandle: 'top' };
+    }
+    if (deltaY < -60) {
+      // Destino arriba a la izquierda: salir por arriba y entrar por la derecha
+      return { sourceHandle: 'top', targetHandle: 'right' };
+    }
+    // Mismo nivel horizontal
+    return { sourceHandle: 'top', targetHandle: 'top' };
+  }
+
+  // 2. Destino predominantemente arriba (deltaY < -60) y cerca en X (ej: rama de error o validación)
+  if (deltaY < -60 && Math.abs(deltaX) < 400) {
+    return { sourceHandle: 'top', targetHandle: 'bottom' };
+  }
+
+  // 3. Destino predominantemente abajo (deltaY > 150) con poco avance en X
+  if (deltaY > 150 && deltaX < 200) {
+    return { sourceHandle: 'bottom', targetHandle: 'top' };
+  }
+
+  // 4. Avance estándar de izquierda a derecha
+  return { sourceHandle: 'right', targetHandle: 'left' };
+}
+
+function EdgeConEtiqueta({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  data,
+  style,
+  markerEnd,
+  selected,
+}) {
   const legacyNumber = Number(data?.valor_entrada);
   const numero = Number(data?.orden) > 0 ? Number(data.orden) : (Number.isInteger(legacyNumber) && legacyNumber > 0 ? legacyNumber : null);
   const etiqueta = data?.etiqueta || '';
   const textoEtiqueta = etiqueta ? `${numero ? `${numero}. ` : ''}${etiqueta}` : (numero ? String(numero) : '');
-  const edgeColor = 'var(--color-brand-primary)';
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
+  const theme = data?.theme || getEdgeSemanticTheme(etiqueta, data?.valor_entrada);
+
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
     targetX,
     targetY,
     targetPosition,
-    borderRadius: 8,
+    curvature: 0.35,
   });
 
   return (
     <>
-      <BaseEdge id={id} path={edgePath} style={{ ...style, stroke: edgeColor, strokeWidth: 2 }} markerEnd={MarkerType.ArrowClosed} />
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        interactionWidth={20}
+        style={{
+          ...style,
+          stroke: theme.stroke,
+          strokeWidth: selected ? 2.5 : 2,
+        }}
+        markerEnd={markerEnd}
+      />
       {textoEtiqueta && (
         <EdgeLabelRenderer>
           <div
-            className="flow-edge-label"
-            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+            className="nodrag nopan flow-edge-label-wrapper"
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              pointerEvents: 'all',
+            }}
           >
-            {textoEtiqueta}
+            <div
+              role="button"
+              tabIndex={0}
+              className={`flow-edge-label ${selected ? 'is-selected' : ''}`}
+              style={{
+                borderColor: selected ? theme.stroke : theme.border,
+                boxShadow: selected ? `0 0 12px ${theme.stroke}55` : undefined,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent('flow:select-edge', { detail: { id } }));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent('flow:select-edge', { detail: { id } }));
+                }
+              }}
+            >
+              <span
+                className="flow-edge-dot"
+                style={{ background: theme.dot }}
+              />
+              <span style={{ color: theme.text }}>
+                {textoEtiqueta}
+              </span>
+            </div>
           </div>
         </EdgeLabelRenderer>
       )}
@@ -183,8 +340,10 @@ function NodoFormulario({ data, selected }) {
           : '0 2px 8px rgba(0,0,0,0.1)',
       }}
     >
-      <Handle type="target" position={Position.Left} style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }} />
-      <Handle type="source" position={Position.Right} style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }} />
+      <Handle type="source" position={Position.Left} id="left" style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }} />
+      <Handle type="source" position={Position.Right} id="right" style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }} />
+      <Handle type="source" position={Position.Top} id="top" style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }} />
+      <Handle type="source" position={Position.Bottom} id="bottom" style={{ background: colores.border, width: 10, height: 10, border: '2px solid var(--color-bg-base)', borderRadius: '50%' }} />
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-[11px] font-bold text-[#4f46e5] truncate max-w-[140px]" title={data.codigo}>
           {data.codigo}
@@ -218,6 +377,7 @@ export default function AdminPanel() {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
+  const hasFittedViewRef = useRef(false);
 
   const [formCodigo, setFormCodigo] = useState('');
   const [formTipo, setFormTipo] = useState('OPCION');
@@ -264,27 +424,51 @@ export default function AdminPanel() {
         },
       }));
 
+      const nodoMap = new Map((nodosActivos || []).map(n => [n.id, n]));
+
       const formattedEdges = (edgesData || [])
         .filter((edge) => idsNodosActivos.has(edge.nodo_origen_id) && idsNodosActivos.has(edge.nodo_destino_id))
-        .map((edge) => ({
-          id: edge.id,
-          source: edge.nodo_origen_id,
-          target: edge.nodo_destino_id,
-          type: 'custom-edge',
-          animated: true,
-          label: edge.etiqueta || '',
-          data: {
-            etiqueta: edge.etiqueta || '',
-            valor_entrada: edge.valor_entrada || '',
-            orden: edge.orden > 0 ? edge.orden : (Number(edge.valor_entrada) > 0 ? Number(edge.valor_entrada) : null),
-          },
-          style: { stroke: 'var(--color-brand-primary)', strokeWidth: 2 },
-        }));
+        .map((edge) => {
+          const theme = getEdgeSemanticTheme(edge.etiqueta, edge.valor_entrada);
+          const nodoOrigen = nodoMap.get(edge.nodo_origen_id);
+          const nodoDestino = nodoMap.get(edge.nodo_destino_id);
+
+          const handles = (edge.condicion?.sourceHandle && edge.condicion?.targetHandle)
+            ? { sourceHandle: edge.condicion.sourceHandle, targetHandle: edge.condicion.targetHandle }
+            : resolverHandlesOptimos(nodoOrigen, nodoDestino, edge.etiqueta);
+
+          return {
+            id: edge.id,
+            source: edge.nodo_origen_id,
+            target: edge.nodo_destino_id,
+            sourceHandle: handles.sourceHandle,
+            targetHandle: handles.targetHandle,
+            type: 'custom-edge',
+            animated: false,
+            label: edge.etiqueta || '',
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: theme.stroke,
+              width: 18,
+              height: 18,
+            },
+            data: {
+              etiqueta: edge.etiqueta || '',
+              valor_entrada: edge.valor_entrada || '',
+              orden: edge.orden > 0 ? edge.orden : (Number(edge.valor_entrada) > 0 ? Number(edge.valor_entrada) : null),
+              theme,
+              sourceHandle: handles.sourceHandle,
+              targetHandle: handles.targetHandle,
+            },
+            style: { stroke: theme.stroke, strokeWidth: 2 },
+          };
+        });
 
       setNodes(formattedNodes);
       setEdges(formattedEdges);
 
-      if (reactFlowInstance) {
+      if (reactFlowInstance && !hasFittedViewRef.current) {
+        hasFittedViewRef.current = true;
         setTimeout(() => reactFlowInstance.fitView({ padding: 0.15, duration: 400 }), 100);
       }
     } catch (err) {
@@ -324,13 +508,32 @@ export default function AdminPanel() {
 
   const onConnect = useCallback(async (params) => {
     const edgeId = `edge-${Date.now()}`;
+    const defaultTheme = getEdgeSemanticTheme('', '');
+    const sourceH = params.sourceHandle || 'right';
+    const targetH = params.targetHandle || 'left';
+
     const newEdge = {
       ...params,
       id: edgeId,
+      sourceHandle: sourceH,
+      targetHandle: targetH,
       type: 'custom-edge',
-      animated: true,
-      data: { etiqueta: '', valor_entrada: '', orden: null },
-      style: { stroke: 'var(--color-brand-primary)', strokeWidth: 2 },
+      animated: false,
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: defaultTheme.stroke,
+        width: 18,
+        height: 18,
+      },
+      data: {
+        etiqueta: '',
+        valor_entrada: '',
+        orden: null,
+        theme: defaultTheme,
+        sourceHandle: sourceH,
+        targetHandle: targetH,
+      },
+      style: { stroke: defaultTheme.stroke, strokeWidth: 2 },
     };
 
     setEdges((eds) => addEdge(newEdge, eds));
@@ -346,6 +549,10 @@ export default function AdminPanel() {
           etiqueta: '',
           valor_entrada: '',
           orden: 0,
+          condicion: {
+            sourceHandle: sourceH,
+            targetHandle: targetH,
+          },
         }),
       });
 
@@ -355,15 +562,28 @@ export default function AdminPanel() {
       }
 
       const savedEdge = await res.json();
+      const savedTheme = getEdgeSemanticTheme(savedEdge.etiqueta, savedEdge.valor_entrada);
       setEdges((eds) => eds.map(e => e.id === edgeId
         ? {
           ...e,
           id: savedEdge.id,
+          sourceHandle: sourceH,
+          targetHandle: targetH,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: savedTheme.stroke,
+            width: 18,
+            height: 18,
+          },
           data: {
             etiqueta: savedEdge.etiqueta || '',
             valor_entrada: savedEdge.valor_entrada || '',
             orden: savedEdge.orden > 0 ? savedEdge.orden : null,
+            theme: savedTheme,
+            sourceHandle: sourceH,
+            targetHandle: targetH,
           },
+          style: { stroke: savedTheme.stroke, strokeWidth: 2 },
         }
         : e));
       await validarArbol();
@@ -560,6 +780,26 @@ export default function AdminPanel() {
     setEdgeEditandoId(null);
   }, []);
 
+  useEffect(() => {
+    const handleSelectEdge = (e) => {
+      const edgeId = e.detail?.id;
+      if (!edgeId) return;
+      const targetEdge = edges.find((edge) => edge.id === edgeId);
+      if (targetEdge) {
+        onEdgeClick(null, targetEdge);
+        setEdges((eds) =>
+          eds.map((edge) => ({
+            ...edge,
+            selected: edge.id === edgeId,
+          }))
+        );
+      }
+    };
+
+    window.addEventListener('flow:select-edge', handleSelectEdge);
+    return () => window.removeEventListener('flow:select-edge', handleSelectEdge);
+  }, [edges, onEdgeClick]);
+
   const limpiarSeleccion = useCallback(() => {
     setNodoEditandoId(null);
     setEdgeEditandoId(null);
@@ -574,7 +814,17 @@ export default function AdminPanel() {
 
   const onEditorPointerDown = useCallback((event) => {
     const target = event.target;
-    if (target.closest('.react-flow__node') || target.closest('.flow-editor-form')) return;
+    if (
+      target.closest('.react-flow__node') ||
+      target.closest('.react-flow__edge') ||
+      target.closest('.flow-edge-label') ||
+      target.closest('.flow-edge-label-wrapper') ||
+      target.closest('.react-flow__edgelabel-renderer') ||
+      target.closest('.flow-editor-form') ||
+      target.closest('.react-flow__controls') ||
+      target.closest('aside') ||
+      target.closest('header')
+    ) return;
     limpiarSeleccion();
   }, [limpiarSeleccion]);
 
@@ -599,12 +849,53 @@ export default function AdminPanel() {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.detail || `Error HTTP ${res.status}`);
         }
+        // Recalcular handles óptimos para las conexiones del nodo arrastrado y persistir
+        setEdges((eds) => eds.map((e) => {
+          if (e.source === node.id || e.target === node.id) {
+            const origenNode = e.source === node.id ? node : nodes.find(n => n.id === e.source);
+            const destinoNode = e.target === node.id ? node : nodes.find(n => n.id === e.target);
+            if (origenNode && destinoNode) {
+              const handles = resolverHandlesOptimos(
+                { posicion_x: origenNode.position?.x, posicion_y: origenNode.position?.y },
+                { posicion_x: destinoNode.position?.x, posicion_y: destinoNode.position?.y },
+                e.data?.etiqueta
+              );
+              fetch(`${API_BASE}/opciones/${e.id}`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  nodo_origen_id: e.source,
+                  nodo_destino_id: e.target,
+                  etiqueta: e.data?.etiqueta || '',
+                  orden: Number(e.data?.orden) || 1,
+                  condicion: {
+                    sourceHandle: handles.sourceHandle,
+                    targetHandle: handles.targetHandle,
+                  },
+                }),
+              }).catch(() => {});
+
+              return {
+                ...e,
+                sourceHandle: handles.sourceHandle,
+                targetHandle: handles.targetHandle,
+                data: {
+                  ...e.data,
+                  sourceHandle: handles.sourceHandle,
+                  targetHandle: handles.targetHandle,
+                },
+              };
+            }
+          }
+          return e;
+        }));
       } catch (err) {
         console.error('Error guardando posición:', err);
         toast.error(`Error guardando posición: ${err.message}`);
       }
     }
-  }, [cargarGrafo]);
+  }, [nodes]);
 
   const handleSubmitNodo = async (e) => {
     e.preventDefault();
@@ -703,15 +994,37 @@ export default function AdminPanel() {
           nodo_destino_id: edge.target,
           etiqueta: formEtiqueta.trim(),
           orden: Number(formOrden) || 1,
+          condicion: {
+            sourceHandle: edge.sourceHandle || edge.data?.sourceHandle || 'right',
+            targetHandle: edge.targetHandle || edge.data?.targetHandle || 'left',
+          },
         }),
       });
 
       if (!res.ok) throw new Error('Error guardando opción');
 
+      const updatedTheme = getEdgeSemanticTheme(formEtiqueta.trim(), edge.data?.valor_entrada);
+
       setEdges((eds) => {
         const nextEdges = eds.map((e) =>
           e.id === edgeEditandoId
-            ? { ...e, label: `${formOrden}. ${formEtiqueta || 'Sin etiqueta'}`, data: { ...e.data, etiqueta: formEtiqueta.trim(), orden: Number(formOrden) || 1 } }
+            ? {
+                ...e,
+                label: `${formOrden}. ${formEtiqueta.trim() || 'Sin etiqueta'}`,
+                markerEnd: {
+                  type: MarkerType.ArrowClosed,
+                  color: updatedTheme.stroke,
+                  width: 18,
+                  height: 18,
+                },
+                data: {
+                  ...e.data,
+                  etiqueta: formEtiqueta.trim(),
+                  orden: Number(formOrden) || 1,
+                  theme: updatedTheme,
+                },
+                style: { stroke: updatedTheme.stroke, strokeWidth: 2 },
+              }
             : e
         );
         return nextEdges;
@@ -984,9 +1297,11 @@ export default function AdminPanel() {
                 nodesDraggable={true}
                 nodesConnectable={true}
                 elementsSelectable={true}
-                connectionMode="loose"
+                connectionMode={ConnectionMode.Loose}
                 nodeTypes={initialNodeTypes}
                 edgeTypes={initialEdgeTypes}
+                connectionLineType={ConnectionLineType.Bezier}
+                connectionLineStyle={{ stroke: 'var(--color-brand-primary)', strokeWidth: 2 }}
                 defaultViewport={{ x: 0, y: 0, zoom: 1 }}
                 attributionPosition="bottom-left"
               >
